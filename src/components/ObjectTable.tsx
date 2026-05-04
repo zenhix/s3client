@@ -1,5 +1,15 @@
 import { useState } from "react";
-import type { ObjectInfo, SortField, SortDir } from "../types";
+import type { ObjectInfo, SortField, SortDir } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   objects: ObjectInfo[];
@@ -35,8 +45,8 @@ function getFileIcon(key: string, isFolder: boolean): string {
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext))
     return "🖼️";
-  if (["pdf"].includes(ext)) return "📕";
-  if (["json"].includes(ext)) return "📋";
+  if (ext === "pdf") return "📕";
+  if (ext === "json") return "📋";
   if (["csv", "tsv", "xls", "xlsx"].includes(ext)) return "📊";
   if (["zip", "gz", "tar", "rar", "7z"].includes(ext)) return "📦";
   if (["mp4", "mov", "avi", "mkv"].includes(ext)) return "🎬";
@@ -91,9 +101,7 @@ export default function ObjectTable({
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    // Folders always first
     if (a.is_folder !== b.is_folder) return a.is_folder ? -1 : 1;
-
     let cmp = 0;
     switch (sortField) {
       case "key":
@@ -109,9 +117,13 @@ export default function ObjectTable({
     return sortDir === "asc" ? cmp : -cmp;
   });
 
+  const allFiles = sorted.filter((o) => !o.is_folder);
+  const allSelected =
+    allFiles.length > 0 && allFiles.every((o) => selected.has(o.key));
+
   if (sorted.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
         {filter ? "No matching objects" : "This folder is empty"}
       </div>
     );
@@ -119,96 +131,87 @@ export default function ObjectTable({
 
   return (
     <div className="overflow-auto flex-1">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-          <tr className="text-left text-gray-500 dark:text-gray-400">
-            <th className="w-10 px-4 py-2">
-              <input
-                type="checkbox"
-                checked={
-                  sorted.length > 0 &&
-                  sorted.filter((o) => !o.is_folder).every((o) => selected.has(o.key))
-                }
-                onChange={(e) => {
-                  sorted
-                    .filter((o) => !o.is_folder)
-                    .forEach((o) => onSelect(o.key, e.target.checked));
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(v) => {
+                  allFiles.forEach((o) => onSelect(o.key, v === true));
                 }}
-                className="rounded"
               />
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none"
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground"
               onClick={() => handleSort("key")}
             >
               Name{sortIndicator("key")}
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none w-28"
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground w-28"
               onClick={() => handleSort("size")}
             >
               Size{sortIndicator("size")}
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none w-48"
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground w-48"
               onClick={() => handleSort("last_modified")}
             >
               Modified{sortIndicator("last_modified")}
-            </th>
-            <th className="px-4 py-2 w-20">Type</th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead className="w-24">Type</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sorted.map((obj) => {
             const name = displayName(obj.key, prefix);
             return (
-              <tr
+              <TableRow
                 key={obj.key}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onContextMenu(e, obj.key);
                 }}
-                className={`border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-gray-800/50 transition-colors ${
-                  selected.has(obj.key)
-                    ? "bg-blue-50 dark:bg-blue-900/20"
-                    : ""
-                }`}
+                className={selected.has(obj.key) ? "bg-accent" : ""}
               >
-                <td className="px-4 py-2">
+                <TableCell>
                   {!obj.is_folder && (
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(obj.key)}
-                      onChange={(e) => onSelect(obj.key, e.target.checked)}
-                      className="rounded"
+                      onCheckedChange={(v) => onSelect(obj.key, v === true)}
                     />
                   )}
-                </td>
-                <td className="px-4 py-2">
+                </TableCell>
+                <TableCell>
                   <button
                     onClick={() =>
-                      obj.is_folder ? onNavigate(obj.key) : onPreview(obj.key)
+                      obj.is_folder
+                        ? onNavigate(obj.key)
+                        : onPreview(obj.key)
                     }
-                    className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 text-gray-900 dark:text-white"
+                    className="flex items-center gap-2 hover:text-primary transition-colors"
                   >
                     <span>{getFileIcon(obj.key, obj.is_folder)}</span>
                     <span className="truncate">{name}</span>
                   </button>
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {obj.is_folder ? "—" : formatSize(obj.size)}
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {formatDate(obj.last_modified)}
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
-                  {getFileType(obj.key, obj.is_folder)}
-                </td>
-              </tr>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {getFileType(obj.key, obj.is_folder)}
+                  </Badge>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

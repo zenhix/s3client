@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { BucketInfo, ObjectInfo, SavedConnection } from "../types";
+import type { BucketInfo, ObjectInfo, SavedConnection } from "@/types";
 
 export function useS3() {
   async function connect(

@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+
 interface Props {
   bucket: string | null;
   prefix: string;
@@ -16,29 +19,30 @@ export default function Breadcrumbs({
   const parts = prefix ? prefix.split("/").filter(Boolean) : [];
 
   return (
-    <div className="flex items-center gap-1 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 text-sm overflow-x-auto">
-      <button
-        onClick={onBack}
-        className="px-2 py-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors shrink-0"
-        title="Go back"
-      >
+    <div className="flex items-center gap-1 px-4 py-2 border-b text-sm overflow-x-auto">
+      <Button variant="ghost" size="sm" onClick={onBack} className="h-7 px-2">
         ←
-      </button>
-      <button
+      </Button>
+      <Separator orientation="vertical" className="h-4 mx-1" />
+      <Button
+        variant="link"
+        size="sm"
         onClick={onBucketList}
-        className="text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+        className="h-7 px-1 text-muted-foreground hover:text-foreground"
       >
         Buckets
-      </button>
+      </Button>
       {bucket && (
         <>
-          <span className="text-gray-400 dark:text-gray-500">/</span>
-          <button
+          <span className="text-muted-foreground">/</span>
+          <Button
+            variant="link"
+            size="sm"
             onClick={() => onNavigate("")}
-            className="text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+            className="h-7 px-1"
           >
             {bucket}
-          </button>
+          </Button>
         </>
       )}
       {parts.map((part, i) => {
@@ -46,18 +50,18 @@ export default function Breadcrumbs({
         const isLast = i === parts.length - 1;
         return (
           <span key={path} className="flex items-center gap-1">
-            <span className="text-gray-400 dark:text-gray-500">/</span>
+            <span className="text-muted-foreground">/</span>
             {isLast ? (
-              <span className="text-gray-900 dark:text-white font-medium">
-                {part}
-              </span>
+              <span className="font-medium px-1">{part}</span>
             ) : (
-              <button
+              <Button
+                variant="link"
+                size="sm"
                 onClick={() => onNavigate(path)}
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="h-7 px-1"
               >
                 {part}
-              </button>
+              </Button>
             )}
           </span>
         );

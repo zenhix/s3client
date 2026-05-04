@@ -19,7 +19,18 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git remote:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(pnpm add:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:tauri.app)",
+      "WebSearch",
+      "WebFetch(domain:v2.tauri.app)",
+      "WebFetch(domain:github.com)",
+      "Bash(identify /Users/kenny/zenhix/s3client/src-tauri/icons/icon.png)",
+      "Bash(pnpm tauri:*)",
+      "Bash(npx tauri:*)",
+      "Bash(npx shadcn@latest:*)"
     ]
   }
 }

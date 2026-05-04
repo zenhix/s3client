@@ -1,14 +1,28 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useS3 } from "./hooks/useS3";
+import { useState, useCallback, useEffect } from "react";
+import { useS3 } from "@/hooks/useS3";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { save, open } from "@tauri-apps/plugin-dialog";
-import ConnectionDialog from "./components/ConnectionDialog";
-import BucketList from "./components/BucketList";
-import ObjectTable from "./components/ObjectTable";
-import Breadcrumbs from "./components/Breadcrumbs";
-import Toolbar from "./components/Toolbar";
-import FilePreview from "./components/FilePreview";
-import type { BucketInfo, ObjectInfo } from "./types";
+import { toast } from "sonner";
+import ConnectionDialog from "@/components/ConnectionDialog";
+import BucketList from "@/components/BucketList";
+import ObjectTable from "@/components/ObjectTable";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import Toolbar from "@/components/Toolbar";
+import FilePreview from "@/components/FilePreview";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { BucketInfo, ObjectInfo } from "@/types";
 
 export default function App() {
   const s3 = useS3();
@@ -22,24 +36,16 @@ export default function App() {
   const [filter, setFilter] = useState("");
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     key: string;
   } | null>(null);
-  const [toast, setToast] = useState("");
-  const dropRef = useRef<HTMLDivElement>(null);
 
-  // History for back navigation
   const [history, setHistory] = useState<
     Array<{ bucket: string | null; prefix: string }>
   >([]);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
-  }
 
   const loadBuckets = useCallback(
     async (connId: string) => {
@@ -51,7 +57,7 @@ export default function App() {
         setPrefix("");
         setObjects([]);
       } catch (e) {
-        setError(String(e));
+        toast.error("Failed to list buckets", { description: String(e) });
       } finally {
         setLoading(false);
       }
@@ -68,7 +74,7 @@ export default function App() {
         setSelected(new Set());
         setFilter("");
       } catch (e) {
-        setError(String(e));
+        toast.error("Failed to list objects", { description: String(e) });
       } finally {
         setLoading(false);
       }
@@ -98,8 +104,7 @@ export default function App() {
   }
 
   function goBack() {
-    if (!connectionId) return;
-    if (history.length === 0) return;
+    if (!connectionId || history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
     if (prev.bucket === null) {
@@ -137,33 +142,34 @@ export default function App() {
 
     const paths = Array.isArray(files) ? files : [files];
     for (const filePath of paths) {
-      const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
+      const fileName =
+        filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
       const key = prefix + fileName;
       try {
         await s3.uploadObject(connectionId, currentBucket, key, filePath);
-        showToast(`Uploaded ${fileName}`);
+        toast.success(`Uploaded ${fileName}`);
       } catch (e) {
-        setError(String(e));
+        toast.error(`Failed to upload ${fileName}`, {
+          description: String(e),
+        });
       }
     }
     loadObjects(connectionId, currentBucket, prefix);
   }
 
-  async function handleDelete() {
+  async function confirmDelete() {
     if (!connectionId || !currentBucket || selected.size === 0) return;
     const count = selected.size;
-    if (!window.confirm(`Delete ${count} object${count > 1 ? "s" : ""}?`))
-      return;
-
     for (const key of selected) {
       try {
         await s3.deleteObject(connectionId, currentBucket, key);
       } catch (e) {
-        setError(String(e));
+        toast.error(`Failed to delete`, { description: String(e) });
       }
     }
-    showToast(`Deleted ${count} object${count > 1 ? "s" : ""}`);
+    toast.success(`Deleted ${count} object${count > 1 ? "s" : ""}`);
     setSelected(new Set());
+    setDeleteDialogOpen(false);
     loadObjects(connectionId, currentBucket, prefix);
   }
 
@@ -174,9 +180,9 @@ export default function App() {
     if (path) {
       try {
         await s3.downloadObject(connectionId, currentBucket, key, path);
-        showToast(`Downloaded ${fileName}`);
+        toast.success(`Downloaded ${fileName}`);
       } catch (e) {
-        setError(String(e));
+        toast.error("Download failed", { description: String(e) });
       }
     }
   }
@@ -184,7 +190,7 @@ export default function App() {
   async function copyS3Uri(key: string) {
     const uri = `s3://${currentBucket}/${key}`;
     await writeText(uri);
-    showToast(`Copied ${uri}`);
+    toast.success(`Copied ${uri}`);
     setContextMenu(null);
   }
 
@@ -192,7 +198,6 @@ export default function App() {
     setContextMenu({ x: e.clientX, y: e.clientY, key });
   }
 
-  // Close context menu on click elsewhere
   useEffect(() => {
     function handler() {
       setContextMenu(null);
@@ -202,42 +207,6 @@ export default function App() {
       return () => window.removeEventListener("click", handler);
     }
   }, [contextMenu]);
-
-  // Drag and drop
-  useEffect(() => {
-    const el = dropRef.current;
-    if (!el || !currentBucket) return;
-
-    function handleDragOver(e: DragEvent) {
-      e.preventDefault();
-      el!.classList.add("ring-2", "ring-blue-400");
-    }
-    function handleDragLeave() {
-      el!.classList.remove("ring-2", "ring-blue-400");
-    }
-    async function handleDrop(e: DragEvent) {
-      e.preventDefault();
-      el!.classList.remove("ring-2", "ring-blue-400");
-      if (!connectionId || !currentBucket) return;
-
-      const files = e.dataTransfer?.files;
-      if (!files || files.length === 0) return;
-
-      // Tauri drag-and-drop provides file paths via a custom event,
-      // but the web DragEvent doesn't give local paths.
-      // For now, show a hint to use the Upload button.
-      showToast("Use the Upload button to select files");
-    }
-
-    el.addEventListener("dragover", handleDragOver);
-    el.addEventListener("dragleave", handleDragLeave);
-    el.addEventListener("drop", handleDrop);
-    return () => {
-      el.removeEventListener("dragover", handleDragOver);
-      el.removeEventListener("dragleave", handleDragLeave);
-      el.removeEventListener("drop", handleDrop);
-    };
-  }, [connectionId, currentBucket, prefix, s3]);
 
   async function handleDisconnect() {
     if (connectionId) {
@@ -258,11 +227,7 @@ export default function App() {
   }
 
   return (
-    <div
-      ref={dropRef}
-      className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-    >
-      {/* Breadcrumbs */}
+    <div className="flex flex-col h-screen bg-background text-foreground">
       <Breadcrumbs
         bucket={currentBucket}
         prefix={prefix}
@@ -271,34 +236,21 @@ export default function App() {
         onBucketList={goToBucketList}
       />
 
-      {/* Toolbar */}
       <Toolbar
         filter={filter}
         onFilterChange={setFilter}
         onUpload={handleUpload}
-        onDelete={handleDelete}
+        onDelete={() => setDeleteDialogOpen(true)}
         hasSelection={selected.size > 0}
         inBucket={currentBucket !== null}
       />
 
-      {/* Error banner */}
-      {error && (
-        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError("")} className="ml-2 hover:underline">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Loading */}
       {loading && (
-        <div className="px-4 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs">
+        <div className="px-4 py-1 text-xs text-muted-foreground border-b">
           Loading...
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 overflow-auto">
         {currentBucket === null ? (
           <BucketList buckets={buckets} onSelect={enterBucket} />
@@ -317,61 +269,85 @@ export default function App() {
       </div>
 
       {/* Status bar */}
-      <div className="px-4 py-1.5 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-        <span>
-          Connected to {endpoint}
-          {currentBucket && ` · ${currentBucket}`}
-          {objects.length > 0 &&
-            ` · ${objects.length} item${objects.length !== 1 ? "s" : ""}`}
-        </span>
-        <button
+      <div className="flex items-center justify-between px-4 py-1.5 border-t text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs font-normal h-5">
+            {endpoint}
+          </Badge>
+          {currentBucket && (
+            <span className="text-muted-foreground">
+              {currentBucket} &middot; {objects.length} item
+              {objects.length !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleDisconnect}
-          className="text-red-500 hover:text-red-600 hover:underline"
+          className="h-6 text-xs text-destructive hover:text-destructive"
         >
           Disconnect
-        </button>
+        </Button>
       </div>
 
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 min-w-[160px]"
+          className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
             onClick={() => copyS3Uri(contextMenu.key)}
-            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="w-full flex items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
           >
             Copy S3 URI
           </button>
+          <Separator className="my-1" />
           <button
             onClick={() => {
               handleDownload(contextMenu.key);
               setContextMenu(null);
             }}
-            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="w-full flex items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
           >
             Download
           </button>
         </div>
       )}
 
-      {/* File preview modal */}
+      {/* File preview */}
       {previewKey && currentBucket && (
         <FilePreview
           connectionId={connectionId}
           bucket={currentBucket}
           objectKey={previewKey}
+          open={!!previewKey}
           onClose={() => setPreviewKey(null)}
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 rounded-lg shadow-lg text-sm z-50 animate-[fadeIn_0.2s]">
-          {toast}
-        </div>
-      )}
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete objects?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selected.size} selected object
+              {selected.size !== 1 ? "s" : ""}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

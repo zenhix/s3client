@@ -22,14 +22,5 @@
     "security": {
       "csp": null
     }
-  },
-  "plugins": {
-    "dialog": {},
-    "clipboard-manager": {},
-    "fs": {
-      "scope": {
-        "allow": ["**"]
-      }
-    }
   }
 }

@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
-import { useS3 } from "../hooks/useS3";
-import type { SavedConnection } from "../types";
+import { useS3 } from "@/hooks/useS3";
+import type { SavedConnection } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Toggle } from "@/components/ui/toggle";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 
 interface Props {
   onConnected: (connectionId: string, endpoint: string) => void;
@@ -16,15 +29,14 @@ export default function ConnectionDialog({ onConnected }: Props) {
   const [saveConn, setSaveConn] = useState(false);
   const [saved, setSaved] = useState<SavedConnection[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     s3.listSavedConnections().then(setSaved).catch(() => {});
   }, []);
 
-  async function handleConnect() {
+  async function handleConnect(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    setError("");
     try {
       const id = await s3.connect(endpoint, region, accessKey, secretKey);
       if (saveConn && name) {
@@ -39,7 +51,7 @@ export default function ConnectionDialog({ onConnected }: Props) {
       }
       onConnected(id, endpoint);
     } catch (e) {
-      setError(String(e));
+      toast.error("Connection failed", { description: String(e) });
     } finally {
       setLoading(false);
     }
@@ -57,136 +69,123 @@ export default function ConnectionDialog({ onConnected }: Props) {
     e.stopPropagation();
     await s3.deleteSavedConnection(id);
     setSaved(saved.filter((c) => c.id !== id));
+    toast.success("Connection removed");
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-          Connect to S3
-        </h1>
-
-        {saved.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Saved Connections
-            </h3>
-            <div className="space-y-1">
-              {saved.map((c) => (
-                <div
-                  key={c.id}
-                  onClick={() => loadSaved(c)}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer group"
-                >
-                  <div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {c.name}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                      {c.endpoint}
-                    </span>
-                  </div>
-                  <button
-                    onClick={(e) => removeSaved(e, c.id)}
-                    className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 text-sm"
-                  >
-                    ✕
-                  </button>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Connect to S3</CardTitle>
+          <CardDescription>
+            Enter your S3 endpoint credentials to browse buckets and objects.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {saved.length > 0 && (
+            <>
+              <div className="mb-4">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Saved Connections
+                </Label>
+                <div className="mt-2 space-y-1">
+                  {saved.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => loadSaved(c)}
+                      className="flex items-center justify-between p-2.5 rounded-md hover:bg-accent cursor-pointer group transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium">{c.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {c.endpoint}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => removeSaved(e, c.id)}
+                        className="opacity-0 group-hover:opacity-100 h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      >
+                        &times;
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <hr className="my-4 border-gray-200 dark:border-gray-700" />
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Endpoint URL
-            </label>
-            <input
-              type="text"
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="http://localhost:4566"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Region
-            </label>
-            <input
-              type="text"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="us-east-1"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Access Key
-            </label>
-            <input
-              type="text"
-              value={accessKey}
-              onChange={(e) => setAccessKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Secret Key
-            </label>
-            <input
-              type="password"
-              value={secretKey}
-              onChange={(e) => setSecretKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="save"
-              checked={saveConn}
-              onChange={(e) => setSaveConn(e.target.checked)}
-              className="rounded"
-            />
-            <label
-              htmlFor="save"
-              className="text-sm text-gray-700 dark:text-gray-300"
-            >
-              Save connection
-            </label>
-            {saveConn && (
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Connection name"
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            )}
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-              {error}
-            </div>
+              </div>
+              <Separator className="mb-4" />
+            </>
           )}
 
-          <button
-            onClick={handleConnect}
-            disabled={loading || !endpoint || !accessKey || !secretKey}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-          >
-            {loading ? "Connecting..." : "Connect"}
-          </button>
-        </div>
-      </div>
+          <form onSubmit={handleConnect} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="endpoint">Endpoint URL</Label>
+              <Input
+                id="endpoint"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="http://localhost:4566"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="region">Region</Label>
+              <Input
+                id="region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                placeholder="us-east-1"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="accessKey">Access Key</Label>
+              <Input
+                id="accessKey"
+                value={accessKey}
+                onChange={(e) => setAccessKey(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="secretKey">Secret Key</Label>
+              <Input
+                id="secretKey"
+                type="password"
+                value={secretKey}
+                onChange={(e) => setSecretKey(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Toggle
+                variant="outline"
+                size="sm"
+                pressed={saveConn}
+                onPressedChange={setSaveConn}
+              >
+                Save connection
+              </Toggle>
+              {saveConn && (
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Connection name"
+                  className="flex-1 h-8 text-sm"
+                />
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading || !endpoint || !accessKey || !secretKey}
+              className="w-full"
+            >
+              {loading ? "Connecting..." : "Connect"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
