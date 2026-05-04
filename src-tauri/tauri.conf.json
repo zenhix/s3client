@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema-v2/master/tauri.conf.json",
+  "productName": "S3 Browser",
+  "version": "0.1.0",
+  "identifier": "com.zenhix.s3browser",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "S3 Browser",
+        "width": 1024,
+        "height": 700,
+        "minWidth": 800,
+        "minHeight": 500
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "dialog": {},
+    "clipboard-manager": {},
+    "fs": {
+      "scope": {
+        "allow": ["**"]
+      }
+    }
+  }
+}
