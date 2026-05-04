@@ -10,9 +10,12 @@ export interface ObjectInfo {
   is_folder: boolean;
 }
 
+export type ConnectionType = "local" | "aws";
+
 export interface SavedConnection {
   id: string;
   name: string;
+  connection_type: ConnectionType;
   endpoint: string;
   region: string;
   access_key: string;

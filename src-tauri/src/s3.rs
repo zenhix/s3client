@@ -6,6 +6,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::State;
 use uuid::Uuid;
 
@@ -48,11 +49,10 @@ pub async fn connect(
 
     let client = S3Client::from_conf(config_builder.build());
 
-    // Test the connection by listing buckets
-    client
-        .list_buckets()
-        .send()
+    // Test the connection by listing buckets (with 10s timeout)
+    tokio::time::timeout(Duration::from_secs(10), client.list_buckets().send())
         .await
+        .map_err(|_| "Connection timed out after 10 seconds".to_string())?
         .map_err(|e| format!("Failed to connect: {}", e))?;
 
     let connection_id = Uuid::new_v4().to_string();

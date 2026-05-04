@@ -7,10 +7,16 @@ use tauri::{AppHandle, Manager};
 pub struct SavedConnection {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_connection_type")]
+    pub connection_type: String,
     pub endpoint: String,
     pub region: String,
     pub access_key: String,
     pub secret_key: String,
+}
+
+fn default_connection_type() -> String {
+    "local".to_string()
 }
 
 fn get_connections_path(app: &AppHandle) -> Result<PathBuf, String> {

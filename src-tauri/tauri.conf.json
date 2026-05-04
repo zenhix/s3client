@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema-v2/master/tauri.conf.json",
-  "productName": "S3 Browser",
+  "productName": "s3client",
   "version": "0.1.0",
   "identifier": "com.zenhix.s3browser",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "S3 Browser",
+        "title": "s3client",
         "width": 1024,
         "height": 700,
         "minWidth": 800,
