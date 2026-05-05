@@ -36,9 +36,12 @@ pub async fn connect(
     access_key: String,
     secret_key: String,
 ) -> Result<String, String> {
+    println!("[s3] connect called: endpoint={}, region={}, access_key={}", endpoint, region, access_key);
+
     let creds = Credentials::new(&access_key, &secret_key, None, None, "s3browser");
 
     let mut config_builder = S3ConfigBuilder::new()
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
         .region(Region::new(region))
         .credentials_provider(creds)
         .force_path_style(true);
@@ -49,11 +52,23 @@ pub async fn connect(
 
     let client = S3Client::from_conf(config_builder.build());
 
+    println!("[s3] testing connection...");
+
     // Test the connection by listing buckets (with 10s timeout)
-    tokio::time::timeout(Duration::from_secs(10), client.list_buckets().send())
-        .await
-        .map_err(|_| "Connection timed out after 10 seconds".to_string())?
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+    match tokio::time::timeout(Duration::from_secs(10), client.list_buckets().send()).await {
+        Ok(Ok(output)) => {
+            let count = output.buckets().len();
+            println!("[s3] connected successfully, found {} buckets", count);
+        }
+        Ok(Err(e)) => {
+            println!("[s3] connection error: {}", e);
+            return Err(format!("Failed to connect: {}", e));
+        }
+        Err(_) => {
+            println!("[s3] connection timed out");
+            return Err("Connection timed out after 10 seconds".to_string());
+        }
+    }
 
     let connection_id = Uuid::new_v4().to_string();
     state
@@ -62,6 +77,7 @@ pub async fn connect(
         .map_err(|e| format!("Lock error: {}", e))?
         .insert(connection_id.clone(), client);
 
+    println!("[s3] connection_id={}", connection_id);
     Ok(connection_id)
 }
 

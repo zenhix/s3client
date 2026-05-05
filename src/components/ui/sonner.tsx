@@ -26,12 +26,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
           <Loader2Icon className="size-4 animate-spin" />
         ),
       }}
+      toastOptions={{
+        style: {
+          fontSize: "13px",
+          padding: "10px 14px",
+        },
+        classNames: {
+          closeButton: "!right-1 !left-auto !top-1",
+        },
+      }}
       style={
         {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          "--width": "320px",
         } as React.CSSProperties
       }
       {...props}

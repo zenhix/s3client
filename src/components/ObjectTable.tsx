@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ObjectInfo, SortField, SortDir } from "@/types";
+import { ArrowUp, ArrowDown, Folder, File } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -18,7 +18,6 @@ interface Props {
   selected: Set<string>;
   onSelect: (key: string, checked: boolean) => void;
   onNavigate: (prefix: string) => void;
-  onPreview: (key: string) => void;
   onContextMenu: (e: React.MouseEvent, key: string) => void;
 }
 
@@ -40,23 +39,6 @@ function formatDate(iso: string | null): string {
   });
 }
 
-function getFileIcon(key: string, isFolder: boolean): string {
-  if (isFolder) return "📁";
-  const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext))
-    return "🖼️";
-  if (ext === "pdf") return "📕";
-  if (ext === "json") return "📋";
-  if (["csv", "tsv", "xls", "xlsx"].includes(ext)) return "📊";
-  if (["zip", "gz", "tar", "rar", "7z"].includes(ext)) return "📦";
-  if (["mp4", "mov", "avi", "mkv"].includes(ext)) return "🎬";
-  if (["mp3", "wav", "flac", "ogg"].includes(ext)) return "🎵";
-  if (["txt", "md", "log"].includes(ext)) return "📄";
-  if (["js", "ts", "py", "rs", "go", "java", "html", "css"].includes(ext))
-    return "📝";
-  return "📄";
-}
-
 function displayName(key: string, prefix: string): string {
   const name = key.startsWith(prefix) ? key.slice(prefix.length) : key;
   return name.endsWith("/") ? name.slice(0, -1) : name;
@@ -76,7 +58,6 @@ export default function ObjectTable({
   selected,
   onSelect,
   onNavigate,
-  onPreview,
   onContextMenu,
 }: Props) {
   const [sortField, setSortField] = useState<SortField>("key");
@@ -91,8 +72,10 @@ export default function ObjectTable({
     }
   }
 
-  const sortIndicator = (field: SortField) =>
-    sortField === field ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+  const sortIcon = (field: SortField) =>
+    sortField === field ? (
+      sortDir === "asc" ? <ArrowUp className="inline h-3 w-3 ml-1" /> : <ArrowDown className="inline h-3 w-3 ml-1" />
+    ) : null;
 
   const filtered = objects.filter((o) => {
     if (!filter) return true;
@@ -117,13 +100,12 @@ export default function ObjectTable({
     return sortDir === "asc" ? cmp : -cmp;
   });
 
-  const allFiles = sorted.filter((o) => !o.is_folder);
   const allSelected =
-    allFiles.length > 0 && allFiles.every((o) => selected.has(o.key));
+    sorted.length > 0 && sorted.every((o) => selected.has(o.key));
 
   if (sorted.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-xs">
         {filter ? "No matching objects" : "This folder is empty"}
       </div>
     );
@@ -138,7 +120,7 @@ export default function ObjectTable({
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={(v) => {
-                  allFiles.forEach((o) => onSelect(o.key, v === true));
+                  sorted.forEach((o) => onSelect(o.key, v === true));
                 }}
               />
             </TableHead>
@@ -146,19 +128,19 @@ export default function ObjectTable({
               className="cursor-pointer select-none hover:text-foreground"
               onClick={() => handleSort("key")}
             >
-              Name{sortIndicator("key")}
+              Name{sortIcon("key")}
             </TableHead>
             <TableHead
               className="cursor-pointer select-none hover:text-foreground w-28"
               onClick={() => handleSort("size")}
             >
-              Size{sortIndicator("size")}
+              Size{sortIcon("size")}
             </TableHead>
             <TableHead
               className="cursor-pointer select-none hover:text-foreground w-48"
               onClick={() => handleSort("last_modified")}
             >
-              Modified{sortIndicator("last_modified")}
+              Modified{sortIcon("last_modified")}
             </TableHead>
             <TableHead className="w-24">Type</TableHead>
           </TableRow>
@@ -176,24 +158,26 @@ export default function ObjectTable({
                 className={selected.has(obj.key) ? "bg-accent" : ""}
               >
                 <TableCell>
-                  {!obj.is_folder && (
-                    <Checkbox
-                      checked={selected.has(obj.key)}
-                      onCheckedChange={(v) => onSelect(obj.key, v === true)}
-                    />
-                  )}
+                  <Checkbox
+                    checked={selected.has(obj.key)}
+                    onCheckedChange={(v) => onSelect(obj.key, v === true)}
+                  />
                 </TableCell>
                 <TableCell>
                   <button
                     onClick={() =>
                       obj.is_folder
                         ? onNavigate(obj.key)
-                        : onPreview(obj.key)
+                        : onSelect(obj.key, !selected.has(obj.key))
                     }
-                    className="flex items-center gap-2 hover:text-primary transition-colors"
+                    className={`flex items-center gap-2 truncate transition-colors cursor-pointer ${obj.is_folder ? "hover:text-primary hover:underline" : "hover:underline"}`}
                   >
-                    <span>{getFileIcon(obj.key, obj.is_folder)}</span>
-                    <span className="truncate">{name}</span>
+                    {obj.is_folder ? (
+                      <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    {name}
                   </button>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
@@ -202,10 +186,8 @@ export default function ObjectTable({
                 <TableCell className="text-muted-foreground">
                   {formatDate(obj.last_modified)}
                 </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="text-xs font-normal">
-                    {getFileType(obj.key, obj.is_folder)}
-                  </Badge>
+                <TableCell className="text-muted-foreground">
+                  {getFileType(obj.key, obj.is_folder)}
                 </TableCell>
               </TableRow>
             );

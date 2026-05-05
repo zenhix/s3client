@@ -1,11 +1,7 @@
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-
 interface Props {
   bucket: string | null;
   prefix: string;
   onNavigate: (prefix: string) => void;
-  onBack: () => void;
   onBucketList: () => void;
 }
 
@@ -13,59 +9,63 @@ export default function Breadcrumbs({
   bucket,
   prefix,
   onNavigate,
-  onBack,
   onBucketList,
 }: Props) {
   const parts = prefix ? prefix.split("/").filter(Boolean) : [];
 
+  // Collapse middle parts: show first, ..., last two
+  let displayParts: Array<{ label: string; path: string | null; isLast: boolean }> = [];
+  if (parts.length <= 3) {
+    displayParts = parts.map((part, i) => ({
+      label: part,
+      path: parts.slice(0, i + 1).join("/") + "/",
+      isLast: i === parts.length - 1,
+    }));
+  } else {
+    displayParts = [
+      { label: parts[0], path: parts.slice(0, 1).join("/") + "/", isLast: false },
+      { label: "...", path: null, isLast: false },
+      { label: parts[parts.length - 2], path: parts.slice(0, parts.length - 1).join("/") + "/", isLast: false },
+      { label: parts[parts.length - 1], path: parts.join("/") + "/", isLast: true },
+    ];
+  }
+
   return (
-    <div className="flex items-center gap-1 px-4 py-2 border-b text-sm overflow-x-auto">
-      <Button variant="ghost" size="sm" onClick={onBack} className="h-7 px-2">
-        ←
-      </Button>
-      <Separator orientation="vertical" className="h-4 mx-1" />
-      <Button
-        variant="link"
-        size="sm"
+    <div className="flex items-center gap-1">
+      <button
         onClick={onBucketList}
-        className="h-7 px-1 text-muted-foreground hover:text-foreground"
+        className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
       >
         Buckets
-      </Button>
+      </button>
       {bucket && (
         <>
           <span className="text-muted-foreground">/</span>
-          <Button
-            variant="link"
-            size="sm"
+          <button
             onClick={() => onNavigate("")}
-            className="h-7 px-1"
+            className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           >
             {bucket}
-          </Button>
+          </button>
         </>
       )}
-      {parts.map((part, i) => {
-        const path = parts.slice(0, i + 1).join("/") + "/";
-        const isLast = i === parts.length - 1;
-        return (
-          <span key={path} className="flex items-center gap-1">
-            <span className="text-muted-foreground">/</span>
-            {isLast ? (
-              <span className="font-medium px-1">{part}</span>
-            ) : (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={() => onNavigate(path)}
-                className="h-7 px-1"
-              >
-                {part}
-              </Button>
-            )}
-          </span>
-        );
-      })}
+      {displayParts.map((item, i) => (
+        <span key={i} className="flex items-center gap-1">
+          <span className="text-muted-foreground">/</span>
+          {item.isLast ? (
+            <span className="font-medium px-1">{item.label}</span>
+          ) : item.path === null ? (
+            <span className="px-1 text-muted-foreground">...</span>
+          ) : (
+            <button
+              onClick={() => onNavigate(item.path!)}
+              className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              {item.label}
+            </button>
+          )}
+        </span>
+      ))}
     </div>
   );
 }

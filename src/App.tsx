@@ -1,14 +1,15 @@
 import { useState, useCallback, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useS3 } from "@/hooks/useS3";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import ConnectionSidebar from "@/components/ConnectionSidebar";
 import ConnectionDialog from "@/components/ConnectionDialog";
 import BucketList from "@/components/BucketList";
 import ObjectTable from "@/components/ObjectTable";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Toolbar from "@/components/Toolbar";
-import FilePreview from "@/components/FilePreview";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,13 +20,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Plus, RefreshCw } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import type { BucketInfo, ObjectInfo } from "@/types";
+import type { BucketInfo, ObjectInfo, SavedConnection } from "@/types";
 
 export default function App() {
   const s3 = useS3();
+  const [saved, setSaved] = useState<SavedConnection[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [buckets, setBuckets] = useState<BucketInfo[]>([]);
@@ -34,7 +36,6 @@ export default function App() {
   const [objects, setObjects] = useState<ObjectInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
-  const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -46,6 +47,17 @@ export default function App() {
   const [history, setHistory] = useState<
     Array<{ bucket: string | null; prefix: string }>
   >([]);
+
+  useEffect(() => {
+    s3.listSavedConnections().then(setSaved).catch(() => {});
+  }, []);
+
+  const refreshSaved = useCallback(async () => {
+    try {
+      const list = await s3.listSavedConnections();
+      setSaved(list);
+    } catch {}
+  }, [s3]);
 
   const loadBuckets = useCallback(
     async (connId: string) => {
@@ -82,10 +94,40 @@ export default function App() {
     [s3],
   );
 
-  function handleConnected(connId: string, ep: string) {
+  async function handleConnected(connId: string, ep: string) {
     setConnectionId(connId);
     setEndpoint(ep);
+    setHistory([]);
+    await refreshSaved();
     loadBuckets(connId);
+  }
+
+  async function handleSidebarConnect(conn: SavedConnection) {
+    try {
+      const id = await s3.connect(conn.endpoint, conn.region, conn.access_key, conn.secret_key);
+      setConnectionId(id);
+      setEndpoint(conn.endpoint || `AWS (${conn.region})`);
+      setHistory([]);
+      loadBuckets(id);
+    } catch (e) {
+      toast.error("Connection failed", { description: String(e) });
+    }
+  }
+
+  async function handleDeleteConnection(id: string) {
+    await s3.deleteSavedConnection(id);
+    setSaved(saved.filter((c) => c.id !== id));
+    if (connectionId === id) {
+      setConnectionId(null);
+      setEndpoint("");
+      setBuckets([]);
+      setCurrentBucket(null);
+      setPrefix("");
+      setObjects([]);
+      setHistory([]);
+      setSelected(new Set());
+    }
+    toast.success("Connection removed");
   }
 
   function enterBucket(bucket: string) {
@@ -187,6 +229,13 @@ export default function App() {
     }
   }
 
+  async function handleDownloadSelected() {
+    if (!connectionId || !currentBucket || selected.size === 0) return;
+    for (const key of selected) {
+      await handleDownload(key);
+    }
+  }
+
   async function copyS3Uri(key: string) {
     const uri = `s3://${currentBucket}/${key}`;
     await writeText(uri);
@@ -208,88 +257,130 @@ export default function App() {
     }
   }, [contextMenu]);
 
-  async function handleDisconnect() {
-    if (connectionId) {
-      await s3.disconnect(connectionId);
-    }
-    setConnectionId(null);
-    setEndpoint("");
-    setBuckets([]);
-    setCurrentBucket(null);
-    setPrefix("");
-    setObjects([]);
-    setHistory([]);
-    setSelected(new Set());
-  }
-
-  if (!connectionId) {
-    return <ConnectionDialog onConnected={handleConnected} />;
-  }
-
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <Breadcrumbs
-        bucket={currentBucket}
-        prefix={prefix}
-        onNavigate={navigateTo}
-        onBack={goBack}
-        onBucketList={goToBucketList}
-      />
-
-      <Toolbar
-        filter={filter}
-        onFilterChange={setFilter}
-        onUpload={handleUpload}
-        onDelete={() => setDeleteDialogOpen(true)}
-        hasSelection={selected.size > 0}
-        inBucket={currentBucket !== null}
-      />
-
-      {loading && (
-        <div className="px-4 py-1 text-xs text-muted-foreground border-b">
-          Loading...
-        </div>
-      )}
-
-      <div className="flex-1 overflow-auto">
-        {currentBucket === null ? (
-          <BucketList buckets={buckets} onSelect={enterBucket} />
-        ) : (
-          <ObjectTable
-            objects={objects}
-            prefix={prefix}
-            filter={filter}
-            selected={selected}
-            onSelect={handleSelect}
-            onNavigate={navigateTo}
-            onPreview={setPreviewKey}
-            onContextMenu={handleContextMenu}
+      {/* Title bar */}
+      <div
+        className="flex items-center gap-3 px-4 h-[40px] border-b shrink-0 select-none text-sm"
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, a")) return;
+          e.preventDefault();
+          getCurrentWindow().startDragging();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => getCurrentWindow().close()}
+            className="w-3.5 h-3.5 rounded-full bg-[#ff5f57] hover:brightness-90 transition-all cursor-pointer"
           />
+          <button
+            onClick={() => getCurrentWindow().minimize()}
+            className="w-3.5 h-3.5 rounded-full bg-[#febc2e] hover:brightness-90 transition-all cursor-pointer"
+          />
+          <button
+            onClick={() => getCurrentWindow().toggleMaximize()}
+            className="w-3.5 h-3.5 rounded-full bg-[#28c840] hover:brightness-90 transition-all cursor-pointer"
+          />
+        </div>
+        {connectionId ? (
+          <span className="text-sm text-muted-foreground">{endpoint}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">s3client</span>
+        )}
+        <div className="flex-1" />
+        {connectionId && (
+          <button
+            onClick={() => {
+              if (currentBucket) {
+                loadObjects(connectionId, currentBucket, prefix);
+              } else {
+                loadBuckets(connectionId);
+              }
+            }}
+            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 border-t text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs font-normal h-5">
-            {endpoint}
-          </Badge>
-          {currentBucket && (
-            <span className="text-muted-foreground">
-              {currentBucket} &middot; {objects.length} item
-              {objects.length !== 1 ? "s" : ""}
-            </span>
+      {/* Body: sidebar + right panel */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar — full height */}
+        <div className="w-56 shrink-0 border-r flex flex-col">
+          <div className="flex items-center justify-between px-4 border-b text-sm h-[37px]">
+            <span className="text-muted-foreground text-xs uppercase tracking-wide">Connections</span>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          <ConnectionSidebar
+            saved={saved}
+            activeConnectionId={connectionId}
+            onConnect={handleSidebarConnect}
+            onDelete={handleDeleteConnection}
+            onNewConnection={() => setDialogOpen(true)}
+          />
+        </div>
+
+        {/* Right panel */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {connectionId ? (
+            <>
+              <Toolbar
+                filter={filter}
+                onFilterChange={setFilter}
+                onUpload={handleUpload}
+                onDownload={handleDownloadSelected}
+                onDelete={() => setDeleteDialogOpen(true)}
+                hasSelection={selected.size > 0}
+                inBucket={currentBucket !== null}
+              />
+
+              {loading && (
+                <div className="px-4 py-1 text-xs text-muted-foreground border-b">
+                  Loading...
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto">
+                {currentBucket === null ? (
+                  <BucketList buckets={buckets} onSelect={enterBucket} />
+                ) : (
+                  <ObjectTable
+                    objects={objects}
+                    prefix={prefix}
+                    filter={filter}
+                    selected={selected}
+                    onSelect={handleSelect}
+                    onNavigate={navigateTo}
+                    onContextMenu={handleContextMenu}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
+              Select or add a connection to get started
+            </div>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDisconnect}
-          className="h-6 text-xs text-destructive hover:text-destructive"
-        >
-          Disconnect
-        </Button>
       </div>
+
+      {/* Footer — breadcrumbs */}
+      {connectionId && (
+        <div className="flex items-center gap-1 px-4 border-t shrink-0 h-[24px] text-[10px] text-muted-foreground overflow-x-auto">
+          <Breadcrumbs
+            bucket={currentBucket}
+            prefix={prefix}
+            onNavigate={navigateTo}
+            onBucketList={goToBucketList}
+          />
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
@@ -316,16 +407,12 @@ export default function App() {
         </div>
       )}
 
-      {/* File preview */}
-      {previewKey && currentBucket && (
-        <FilePreview
-          connectionId={connectionId}
-          bucket={currentBucket}
-          objectKey={previewKey}
-          open={!!previewKey}
-          onClose={() => setPreviewKey(null)}
-        />
-      )}
+      {/* Add connection dialog */}
+      <ConnectionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={handleConnected}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

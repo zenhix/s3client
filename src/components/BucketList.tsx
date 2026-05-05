@@ -1,14 +1,27 @@
 import type { BucketInfo } from "@/types";
 import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   buckets: BucketInfo[];
   onSelect: (bucket: string) => void;
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function BucketList({ buckets, onSelect }: Props) {
@@ -21,29 +34,32 @@ export default function BucketList({ buckets, onSelect }: Props) {
   }
 
   return (
-    <div className="p-4">
-      <h2 className="text-lg font-semibold mb-4">Buckets</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {buckets.map((b) => (
-          <Card
-            key={b.name}
-            className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all"
-            onClick={() => onSelect(b.name)}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🪣</span>
-                <CardTitle className="text-base truncate">{b.name}</CardTitle>
-              </div>
-              {b.created_at && (
-                <CardDescription>
-                  Created {new Date(b.created_at).toLocaleDateString()}
-                </CardDescription>
-              )}
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+    <div className="overflow-auto flex-1">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead className="w-48">Created</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {buckets.map((b) => (
+            <TableRow key={b.name}>
+              <TableCell>
+                <button
+                  onClick={() => onSelect(b.name)}
+                  className="hover:underline hover:text-primary transition-colors cursor-pointer"
+                >
+                  {b.name}
+                </button>
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {formatDate(b.created_at)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
