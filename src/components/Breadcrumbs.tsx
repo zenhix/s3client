@@ -5,6 +5,10 @@ interface Props {
   onBucketList: () => void;
 }
 
+function truncate(str: string, max: number): string {
+  return str.length > max ? str.slice(0, max) + "..." : str;
+}
+
 export default function Breadcrumbs({
   bucket,
   prefix,
@@ -13,28 +17,26 @@ export default function Breadcrumbs({
 }: Props) {
   const parts = prefix ? prefix.split("/").filter(Boolean) : [];
 
-  // Collapse middle parts: show first, ..., last two
+  // Collapse: show only last part with ... if more than 1 segment
   let displayParts: Array<{ label: string; path: string | null; isLast: boolean }> = [];
-  if (parts.length <= 3) {
+  if (parts.length <= 1) {
     displayParts = parts.map((part, i) => ({
-      label: part,
+      label: truncate(part, 30),
       path: parts.slice(0, i + 1).join("/") + "/",
       isLast: i === parts.length - 1,
     }));
   } else {
     displayParts = [
-      { label: parts[0], path: parts.slice(0, 1).join("/") + "/", isLast: false },
       { label: "...", path: null, isLast: false },
-      { label: parts[parts.length - 2], path: parts.slice(0, parts.length - 1).join("/") + "/", isLast: false },
-      { label: parts[parts.length - 1], path: parts.join("/") + "/", isLast: true },
+      { label: truncate(parts[parts.length - 1], 30), path: parts.join("/") + "/", isLast: true },
     ];
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0.5">
       <button
         onClick={onBucketList}
-        className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        className="px-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors shrink-0"
       >
         Buckets
       </button>
@@ -43,23 +45,23 @@ export default function Breadcrumbs({
           <span className="text-muted-foreground">/</span>
           <button
             onClick={() => onNavigate("")}
-            className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            className="px-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors shrink-0"
           >
-            {bucket}
+            {truncate(bucket, 20)}
           </button>
         </>
       )}
       {displayParts.map((item, i) => (
-        <span key={i} className="flex items-center gap-1">
+        <span key={i} className="flex items-center gap-0.5">
           <span className="text-muted-foreground">/</span>
           {item.isLast ? (
-            <span className="font-medium px-1">{item.label}</span>
+            <span className="font-medium px-0.5 truncate max-w-[200px]">{item.label}</span>
           ) : item.path === null ? (
-            <span className="px-1 text-muted-foreground">...</span>
+            <span className="px-0.5 text-muted-foreground">...</span>
           ) : (
             <button
               onClick={() => onNavigate(item.path!)}
-              className="px-1 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              className="px-0.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
               {item.label}
             </button>

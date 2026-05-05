@@ -1,4 +1,4 @@
-import { Upload, Download, Trash2, X } from "lucide-react";
+import { Upload, Download, Trash2, X, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 interface Props {
@@ -7,8 +7,10 @@ interface Props {
   onUpload: () => void;
   onDownload: () => void;
   onDelete: () => void;
+  onBack: () => void;
   hasSelection: boolean;
   inBucket: boolean;
+  canGoBack: boolean;
 }
 
 export default function Toolbar({
@@ -17,18 +19,27 @@ export default function Toolbar({
   onUpload,
   onDownload,
   onDelete,
+  onBack,
   hasSelection,
   inBucket,
+  canGoBack,
 }: Props) {
   return (
-    <div className="flex items-center gap-2 px-4 border-b h-[37px]">
+    <div className="flex items-center gap-2 px-2 border-b h-[37px]">
+      {canGoBack && (
+        <button
+          onClick={onBack}
+          className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
       <div className="relative flex-1">
         <Input
           value={filter}
           onChange={(e) => onFilterChange(e.target.value)}
           placeholder="Filter..."
           className="w-full h-6 text-xs text-muted-foreground pr-6"
-          disabled={!inBucket}
           autoCapitalize="off"
           autoCorrect="off"
         />

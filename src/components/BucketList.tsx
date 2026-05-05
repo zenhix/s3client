@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import type { BucketInfo } from "@/types";
 import {
   Table,
@@ -10,6 +11,7 @@ import {
 
 interface Props {
   buckets: BucketInfo[];
+  filter: string;
   onSelect: (bucket: string) => void;
 }
 
@@ -24,11 +26,15 @@ function formatDate(iso: string | null): string {
   });
 }
 
-export default function BucketList({ buckets, onSelect }: Props) {
-  if (buckets.length === 0) {
+export default function BucketList({ buckets, filter, onSelect }: Props) {
+  const filtered = buckets.filter((b) =>
+    !filter || b.name.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  if (filtered.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
-        No buckets found.
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-xs">
+        {filter ? "No matching buckets" : "No buckets found."}
       </div>
     );
   }
@@ -43,13 +49,14 @@ export default function BucketList({ buckets, onSelect }: Props) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {buckets.map((b) => (
+          {filtered.map((b) => (
             <TableRow key={b.name}>
               <TableCell>
                 <button
                   onClick={() => onSelect(b.name)}
-                  className="hover:underline hover:text-primary transition-colors cursor-pointer"
+                  className="flex items-center gap-2 text-foreground/90 hover:text-foreground transition-colors cursor-pointer"
                 >
+                  <Folder className="h-4 w-4 shrink-0" />
                   {b.name}
                 </button>
               </TableCell>

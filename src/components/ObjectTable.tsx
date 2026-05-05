@@ -170,7 +170,7 @@ export default function ObjectTable({
                         ? onNavigate(obj.key)
                         : onSelect(obj.key, !selected.has(obj.key))
                     }
-                    className={`flex items-center gap-2 truncate transition-colors cursor-pointer ${obj.is_folder ? "hover:text-primary hover:underline" : "hover:underline"}`}
+                    className="flex items-center gap-2 truncate transition-colors cursor-pointer text-foreground/90 hover:text-foreground"
                   >
                     {obj.is_folder ? (
                       <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />

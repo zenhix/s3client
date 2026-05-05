@@ -29,6 +29,7 @@ export default function App() {
   const [saved, setSaved] = useState<SavedConnection[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [buckets, setBuckets] = useState<BucketInfo[]>([]);
   const [currentBucket, setCurrentBucket] = useState<string | null>(null);
@@ -103,9 +104,26 @@ export default function App() {
   }
 
   async function handleSidebarConnect(conn: SavedConnection) {
+    // If already connected to this one, disconnect
+    if (activeSavedId === conn.id) {
+      if (connectionId) await s3.disconnect(connectionId);
+      setConnectionId(null);
+      setActiveSavedId(null);
+      setEndpoint("");
+      setBuckets([]);
+      setCurrentBucket(null);
+      setPrefix("");
+      setObjects([]);
+      setHistory([]);
+      setSelected(new Set());
+      toast.info("Disconnected");
+      return;
+    }
+
     try {
       const id = await s3.connect(conn.endpoint, conn.region, conn.access_key, conn.secret_key);
       setConnectionId(id);
+      setActiveSavedId(conn.id);
       setEndpoint(conn.endpoint || `AWS (${conn.region})`);
       setHistory([]);
       loadBuckets(id);
@@ -117,8 +135,10 @@ export default function App() {
   async function handleDeleteConnection(id: string) {
     await s3.deleteSavedConnection(id);
     setSaved(saved.filter((c) => c.id !== id));
-    if (connectionId === id) {
+    if (activeSavedId === id) {
+      if (connectionId) await s3.disconnect(connectionId);
       setConnectionId(null);
+      setActiveSavedId(null);
       setEndpoint("");
       setBuckets([]);
       setCurrentBucket(null);
@@ -283,9 +303,9 @@ export default function App() {
           />
         </div>
         {connectionId ? (
-          <span className="text-sm text-muted-foreground">{endpoint}</span>
+          <span className="text-sm text-foreground/70">{endpoint}</span>
         ) : (
-          <span className="text-sm text-muted-foreground">s3client</span>
+          <span className="text-sm text-foreground/70">s3client</span>
         )}
         <div className="flex-1" />
         {connectionId && (
@@ -319,7 +339,7 @@ export default function App() {
           </div>
           <ConnectionSidebar
             saved={saved}
-            activeConnectionId={connectionId}
+            activeConnectionId={activeSavedId}
             onConnect={handleSidebarConnect}
             onDelete={handleDeleteConnection}
             onNewConnection={() => setDialogOpen(true)}
@@ -336,8 +356,10 @@ export default function App() {
                 onUpload={handleUpload}
                 onDownload={handleDownloadSelected}
                 onDelete={() => setDeleteDialogOpen(true)}
+                onBack={goBack}
                 hasSelection={selected.size > 0}
                 inBucket={currentBucket !== null}
+                canGoBack={history.length > 0}
               />
 
               {loading && (
@@ -348,7 +370,7 @@ export default function App() {
 
               <div className="flex-1 overflow-auto">
                 {currentBucket === null ? (
-                  <BucketList buckets={buckets} onSelect={enterBucket} />
+                  <BucketList buckets={buckets} filter={filter} onSelect={enterBucket} />
                 ) : (
                   <ObjectTable
                     objects={objects}
@@ -372,7 +394,7 @@ export default function App() {
 
       {/* Footer — breadcrumbs */}
       {connectionId && (
-        <div className="flex items-center gap-1 px-4 border-t shrink-0 h-[24px] text-[10px] text-muted-foreground overflow-x-auto">
+        <div className="flex items-center gap-0.5 px-4 border-t shrink-0 h-[28px] text-[11px] text-muted-foreground overflow-x-auto">
           <Breadcrumbs
             bucket={currentBucket}
             prefix={prefix}
@@ -389,18 +411,22 @@ export default function App() {
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
-            onClick={() => copyS3Uri(contextMenu.key)}
-            className="w-full flex items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              copyS3Uri(contextMenu.key);
+            }}
+            className="w-full flex items-center rounded-sm px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             Copy S3 URI
           </button>
           <Separator className="my-1" />
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               handleDownload(contextMenu.key);
               setContextMenu(null);
             }}
-            className="w-full flex items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="w-full flex items-center rounded-sm px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             Download
           </button>

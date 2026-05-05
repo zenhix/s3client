@@ -32,7 +32,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           padding: "10px 14px",
         },
         classNames: {
-          closeButton: "!right-1 !left-auto !top-1",
+          closeButton: "!right-2 !left-auto !top-2 !transform-none",
         },
       }}
       style={

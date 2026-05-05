@@ -117,9 +117,16 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+[data-sonner-toast] [data-close-button] {
+  left: auto !important;
+  right: 4px !important;
+  top: 4px !important;
+  transform: none !important;
+}
+
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 select-none;
     }
   html {
     @apply font-sans;
