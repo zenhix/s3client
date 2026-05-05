@@ -268,12 +268,14 @@ export default function App() {
   }
 
   useEffect(() => {
-    function handler() {
+    function handler(e: MouseEvent) {
+      const menu = document.getElementById("context-menu");
+      if (menu && menu.contains(e.target as Node)) return;
       setContextMenu(null);
     }
     if (contextMenu) {
-      window.addEventListener("click", handler);
-      return () => window.removeEventListener("click", handler);
+      window.addEventListener("mousedown", handler);
+      return () => window.removeEventListener("mousedown", handler);
     }
   }, [contextMenu]);
 
@@ -407,6 +409,7 @@ export default function App() {
       {/* Context menu */}
       {contextMenu && (
         <div
+          id="context-menu"
           className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
