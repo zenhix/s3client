@@ -49,13 +49,7 @@ interface Props {
 export default function ConnectionDialog({ open, onOpenChange, onConnected }: Props) {
   const s3 = useS3();
 
-  const DEFAULT_NAMES: Record<ConnectionType, string> = {
-    local: "My LocalStack",
-    aws: "My AWS Account",
-  };
-
   const [connectionType, setConnectionType] = useState<ConnectionType>("local");
-  const [name, setName] = useState(DEFAULT_NAMES["local"]);
 
   const [host, setHost] = useState("localhost");
   const [port, setPort] = useState("4566");
@@ -90,14 +84,7 @@ export default function ConnectionDialog({ open, onOpenChange, onConnected }: Pr
     return connectionType === "local" ? localSecretKey : awsSecretKey;
   }
 
-  function getConnectionName(): string {
-    if (name.trim()) return name.trim();
-    if (connectionType === "local") return `${host}:${port}`;
-    return `AWS (${awsRegion})`;
-  }
-
   function canConnect(): boolean {
-    if (!name.trim()) return false;
     if (connectionType === "local") {
       return !!host && !!port && !!localAccessKey && !!localSecretKey;
     }
@@ -120,7 +107,7 @@ export default function ConnectionDialog({ open, onOpenChange, onConnected }: Pr
 
       await s3.saveConnection({
         id,
-        name: getConnectionName(),
+        name: connectionType === "local" ? "Local S3" : "AWS S3",
         connection_type: connectionType,
         endpoint,
         region,
@@ -160,11 +147,7 @@ export default function ConnectionDialog({ open, onOpenChange, onConnected }: Pr
               value={connectionType}
               onValueChange={(v) => {
                 if (!v) return;
-                const newType = v as ConnectionType;
-                if (!name.trim() || Object.values(DEFAULT_NAMES).includes(name)) {
-                  setName(DEFAULT_NAMES[newType]);
-                }
-                setConnectionType(newType);
+                setConnectionType(v as ConnectionType);
               }}
             >
               <SelectTrigger id="connection-type" className="w-full cursor-pointer">
@@ -179,16 +162,6 @@ export default function ConnectionDialog({ open, onOpenChange, onConnected }: Pr
                 <SelectItem value="aws">AWS S3</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-3">
-            <Label htmlFor="name">Connection Name <span className="text-destructive">*</span></Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter a connection name"
-            />
           </div>
 
           <Separator />

@@ -37,11 +37,11 @@ export default function ConnectionSidebar({
               <div className="min-w-0 flex flex-col gap-0.5">
                 <div className="flex items-center gap-2">
                   <img
-                    src={isAws ? "/aws-s3.png" : "/local-s3.svg"}
+                    src="/aws-s3.png"
                     alt={isAws ? "AWS" : "Local"}
-                    className="h-4 w-4 shrink-0"
+                    className="h-5 w-5 shrink-0 rounded-full"
                   />
-                  <span className="truncate font-medium">{c.name}</span>
+                  <span className="truncate font-medium">{isAws ? "AWS S3" : "Local S3"}</span>
                 </div>
                 <span className="text-[11px] text-muted-foreground truncate">
                   {displayEndpoint} · {c.access_key}
