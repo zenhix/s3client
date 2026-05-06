@@ -1,5 +1,15 @@
 import { useState } from "react";
-import type { ObjectInfo, SortField, SortDir } from "../types";
+import type { ObjectInfo, SortField, SortDir } from "@/types";
+import { ArrowUp, ArrowDown, Folder, File } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   objects: ObjectInfo[];
@@ -8,7 +18,6 @@ interface Props {
   selected: Set<string>;
   onSelect: (key: string, checked: boolean) => void;
   onNavigate: (prefix: string) => void;
-  onPreview: (key: string) => void;
   onContextMenu: (e: React.MouseEvent, key: string) => void;
 }
 
@@ -30,23 +39,6 @@ function formatDate(iso: string | null): string {
   });
 }
 
-function getFileIcon(key: string, isFolder: boolean): string {
-  if (isFolder) return "📁";
-  const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext))
-    return "🖼️";
-  if (["pdf"].includes(ext)) return "📕";
-  if (["json"].includes(ext)) return "📋";
-  if (["csv", "tsv", "xls", "xlsx"].includes(ext)) return "📊";
-  if (["zip", "gz", "tar", "rar", "7z"].includes(ext)) return "📦";
-  if (["mp4", "mov", "avi", "mkv"].includes(ext)) return "🎬";
-  if (["mp3", "wav", "flac", "ogg"].includes(ext)) return "🎵";
-  if (["txt", "md", "log"].includes(ext)) return "📄";
-  if (["js", "ts", "py", "rs", "go", "java", "html", "css"].includes(ext))
-    return "📝";
-  return "📄";
-}
-
 function displayName(key: string, prefix: string): string {
   const name = key.startsWith(prefix) ? key.slice(prefix.length) : key;
   return name.endsWith("/") ? name.slice(0, -1) : name;
@@ -66,7 +58,6 @@ export default function ObjectTable({
   selected,
   onSelect,
   onNavigate,
-  onPreview,
   onContextMenu,
 }: Props) {
   const [sortField, setSortField] = useState<SortField>("key");
@@ -81,8 +72,10 @@ export default function ObjectTable({
     }
   }
 
-  const sortIndicator = (field: SortField) =>
-    sortField === field ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+  const sortIcon = (field: SortField) =>
+    sortField === field ? (
+      sortDir === "asc" ? <ArrowUp className="inline h-3 w-3 ml-1" /> : <ArrowDown className="inline h-3 w-3 ml-1" />
+    ) : null;
 
   const filtered = objects.filter((o) => {
     if (!filter) return true;
@@ -91,9 +84,7 @@ export default function ObjectTable({
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    // Folders always first
     if (a.is_folder !== b.is_folder) return a.is_folder ? -1 : 1;
-
     let cmp = 0;
     switch (sortField) {
       case "key":
@@ -109,9 +100,12 @@ export default function ObjectTable({
     return sortDir === "asc" ? cmp : -cmp;
   });
 
+  const allSelected =
+    sorted.length > 0 && sorted.every((o) => selected.has(o.key));
+
   if (sorted.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-xs">
         {filter ? "No matching objects" : "This folder is empty"}
       </div>
     );
@@ -119,96 +113,87 @@ export default function ObjectTable({
 
   return (
     <div className="overflow-auto flex-1">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-          <tr className="text-left text-gray-500 dark:text-gray-400">
-            <th className="w-10 px-4 py-2">
-              <input
-                type="checkbox"
-                checked={
-                  sorted.length > 0 &&
-                  sorted.filter((o) => !o.is_folder).every((o) => selected.has(o.key))
-                }
-                onChange={(e) => {
-                  sorted
-                    .filter((o) => !o.is_folder)
-                    .forEach((o) => onSelect(o.key, e.target.checked));
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(v) => {
+                  sorted.forEach((o) => onSelect(o.key, v === true));
                 }}
-                className="rounded"
               />
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none"
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground"
               onClick={() => handleSort("key")}
             >
-              Name{sortIndicator("key")}
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none w-28"
+              Name{sortIcon("key")}
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground w-28"
               onClick={() => handleSort("size")}
             >
-              Size{sortIndicator("size")}
-            </th>
-            <th
-              className="px-4 py-2 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none w-48"
+              Size{sortIcon("size")}
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none hover:text-foreground w-48"
               onClick={() => handleSort("last_modified")}
             >
-              Modified{sortIndicator("last_modified")}
-            </th>
-            <th className="px-4 py-2 w-20">Type</th>
-          </tr>
-        </thead>
-        <tbody>
+              Modified{sortIcon("last_modified")}
+            </TableHead>
+            <TableHead className="w-24">Type</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sorted.map((obj) => {
             const name = displayName(obj.key, prefix);
             return (
-              <tr
+              <TableRow
                 key={obj.key}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onContextMenu(e, obj.key);
                 }}
-                className={`border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-gray-800/50 transition-colors ${
-                  selected.has(obj.key)
-                    ? "bg-blue-50 dark:bg-blue-900/20"
-                    : ""
-                }`}
+                className={selected.has(obj.key) ? "bg-accent" : ""}
               >
-                <td className="px-4 py-2">
-                  {!obj.is_folder && (
-                    <input
-                      type="checkbox"
-                      checked={selected.has(obj.key)}
-                      onChange={(e) => onSelect(obj.key, e.target.checked)}
-                      className="rounded"
-                    />
-                  )}
-                </td>
-                <td className="px-4 py-2">
+                <TableCell>
+                  <Checkbox
+                    checked={selected.has(obj.key)}
+                    onCheckedChange={(v) => onSelect(obj.key, v === true)}
+                  />
+                </TableCell>
+                <TableCell>
                   <button
                     onClick={() =>
-                      obj.is_folder ? onNavigate(obj.key) : onPreview(obj.key)
+                      obj.is_folder
+                        ? onNavigate(obj.key)
+                        : onSelect(obj.key, !selected.has(obj.key))
                     }
-                    className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 text-gray-900 dark:text-white"
+                    className="flex items-center gap-2 truncate transition-colors cursor-pointer text-foreground/90 hover:text-foreground"
                   >
-                    <span>{getFileIcon(obj.key, obj.is_folder)}</span>
-                    <span className="truncate">{name}</span>
+                    {obj.is_folder ? (
+                      <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    {name}
                   </button>
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {obj.is_folder ? "—" : formatSize(obj.size)}
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {formatDate(obj.last_modified)}
-                </td>
-                <td className="px-4 py-2 text-gray-600 dark:text-gray-400">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {getFileType(obj.key, obj.is_folder)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

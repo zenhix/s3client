@@ -7,10 +7,16 @@ use tauri::{AppHandle, Manager};
 pub struct SavedConnection {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_connection_type")]
+    pub connection_type: String,
     pub endpoint: String,
     pub region: String,
     pub access_key: String,
     pub secret_key: String,
+}
+
+fn default_connection_type() -> String {
+    "local".to_string()
 }
 
 fn get_connections_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -42,9 +48,16 @@ fn save_connections(app: &AppHandle, connections: &[SavedConnection]) -> Result<
 pub fn save_connection(app: AppHandle, connection: SavedConnection) -> Result<(), String> {
     let mut connections = load_connections(&app)?;
 
-    // Update existing or add new
-    if let Some(existing) = connections.iter_mut().find(|c| c.id == connection.id) {
-        *existing = connection;
+    // Update existing (match by endpoint+region+access_key) or add new
+    if let Some(existing) = connections.iter_mut().find(|c| {
+        c.endpoint == connection.endpoint
+            && c.region == connection.region
+            && c.access_key == connection.access_key
+    }) {
+        existing.id = connection.id;
+        existing.name = connection.name;
+        existing.connection_type = connection.connection_type;
+        existing.secret_key = connection.secret_key;
     } else {
         connections.push(connection);
     }

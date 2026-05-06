@@ -1,192 +1,309 @@
-import { useState, useEffect } from "react";
-import { useS3 } from "../hooks/useS3";
-import type { SavedConnection } from "../types";
+import { useState, useRef } from "react";
+import { useS3 } from "@/hooks/useS3";
+import type { ConnectionType } from "@/types";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+
+const AWS_REGIONS = [
+  "us-east-1",
+  "us-east-2",
+  "us-west-1",
+  "us-west-2",
+  "eu-west-1",
+  "eu-west-2",
+  "eu-west-3",
+  "eu-central-1",
+  "eu-north-1",
+  "ap-southeast-1",
+  "ap-southeast-2",
+  "ap-northeast-1",
+  "ap-northeast-2",
+  "ap-south-1",
+  "sa-east-1",
+  "ca-central-1",
+];
 
 interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onConnected: (connectionId: string, endpoint: string) => void;
 }
 
-export default function ConnectionDialog({ onConnected }: Props) {
+export default function ConnectionDialog({ open, onOpenChange, onConnected }: Props) {
   const s3 = useS3();
-  const [endpoint, setEndpoint] = useState("http://localhost:4566");
-  const [region, setRegion] = useState("us-east-1");
-  const [accessKey, setAccessKey] = useState("test");
-  const [secretKey, setSecretKey] = useState("test");
-  const [name, setName] = useState("");
-  const [saveConn, setSaveConn] = useState(false);
-  const [saved, setSaved] = useState<SavedConnection[]>([]);
+
+  const [connectionType, setConnectionType] = useState<ConnectionType>("local");
+
+  const [host, setHost] = useState("localhost");
+  const [port, setPort] = useState("4566");
+  const [localAccessKey, setLocalAccessKey] = useState("");
+  const [localSecretKey, setLocalSecretKey] = useState("");
+
+  const [awsRegion, setAwsRegion] = useState("us-east-1");
+  const [awsAccessKey, setAwsAccessKey] = useState("");
+  const [awsSecretKey, setAwsSecretKey] = useState("");
+
+  const [showLocalSecret, setShowLocalSecret] = useState(false);
+  const [showAwsSecret, setShowAwsSecret] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const cancelledRef = useRef(false);
 
-  useEffect(() => {
-    s3.listSavedConnections().then(setSaved).catch(() => {});
-  }, []);
+  function buildEndpoint(): string {
+    if (connectionType === "local") {
+      return `http://${host}:${port}`;
+    }
+    return "";
+  }
 
-  async function handleConnect() {
+  function getRegion(): string {
+    return connectionType === "local" ? "us-east-1" : awsRegion;
+  }
+
+  function getAccessKey(): string {
+    return connectionType === "local" ? localAccessKey : awsAccessKey;
+  }
+
+  function getSecretKey(): string {
+    return connectionType === "local" ? localSecretKey : awsSecretKey;
+  }
+
+  function canConnect(): boolean {
+    if (connectionType === "local") {
+      return !!host && !!port && !!localAccessKey && !!localSecretKey;
+    }
+    return !!awsRegion && !!awsAccessKey && !!awsSecretKey;
+  }
+
+  async function handleConnect(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    setError("");
+    cancelledRef.current = false;
+    const endpoint = buildEndpoint();
+    const region = getRegion();
+    const accessKey = getAccessKey();
+    const secretKey = getSecretKey();
+
     try {
       const id = await s3.connect(endpoint, region, accessKey, secretKey);
-      if (saveConn && name) {
-        await s3.saveConnection({
-          id,
-          name,
-          endpoint,
-          region,
-          access_key: accessKey,
-          secret_key: secretKey,
-        });
-      }
-      onConnected(id, endpoint);
+
+      if (cancelledRef.current) return;
+
+      await s3.saveConnection({
+        id,
+        name: connectionType === "local" ? "Local S3" : "AWS S3",
+        connection_type: connectionType,
+        endpoint,
+        region,
+        access_key: accessKey,
+        secret_key: secretKey,
+      });
+
+      toast.success("Connected", { description: `Connected to ${endpoint || `AWS (${region})`}` });
+      onConnected(id, endpoint || `AWS (${region})`);
+      onOpenChange(false);
     } catch (e) {
-      setError(String(e));
+      if (!cancelledRef.current) {
+        toast.error("Connection failed", { description: String(e) });
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  function loadSaved(conn: SavedConnection) {
-    setEndpoint(conn.endpoint);
-    setRegion(conn.region);
-    setAccessKey(conn.access_key);
-    setSecretKey(conn.secret_key);
-    setName(conn.name);
-  }
-
-  async function removeSaved(e: React.MouseEvent, id: string) {
-    e.stopPropagation();
-    await s3.deleteSavedConnection(id);
-    setSaved(saved.filter((c) => c.id !== id));
+  function handleCancel() {
+    cancelledRef.current = true;
+    setLoading(false);
+    toast.info("Connection cancelled");
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-          Connect to S3
-        </h1>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-md">Add Connection</DialogTitle>
+        </DialogHeader>
 
-        {saved.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Saved Connections
-            </h3>
-            <div className="space-y-1">
-              {saved.map((c) => (
-                <div
-                  key={c.id}
-                  onClick={() => loadSaved(c)}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer group"
-                >
-                  <div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {c.name}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                      {c.endpoint}
-                    </span>
-                  </div>
-                  <button
-                    onClick={(e) => removeSaved(e, c.id)}
-                    className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 text-sm"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-            <hr className="my-4 border-gray-200 dark:border-gray-700" />
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Endpoint URL
-            </label>
-            <input
-              type="text"
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="http://localhost:4566"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Region
-            </label>
-            <input
-              type="text"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="us-east-1"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Access Key
-            </label>
-            <input
-              type="text"
-              value={accessKey}
-              onChange={(e) => setAccessKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Secret Key
-            </label>
-            <input
-              type="password"
-              value={secretKey}
-              onChange={(e) => setSecretKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="save"
-              checked={saveConn}
-              onChange={(e) => setSaveConn(e.target.checked)}
-              className="rounded"
-            />
-            <label
-              htmlFor="save"
-              className="text-sm text-gray-700 dark:text-gray-300"
+        <form onSubmit={handleConnect} className="space-y-5">
+          <div className="space-y-3">
+            <Label htmlFor="connection-type">Connection Type</Label>
+            <Select
+              value={connectionType}
+              onValueChange={(v) => {
+                if (!v) return;
+                setConnectionType(v as ConnectionType);
+              }}
             >
-              Save connection
-            </label>
-            {saveConn && (
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Connection name"
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            )}
+              <SelectTrigger id="connection-type" className="w-full cursor-pointer">
+                <SelectValue placeholder="Select connection type">
+                  {connectionType === "local"
+                    ? "Local S3 (LocalStack, MinIO)"
+                    : "AWS S3"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local">Local S3 (LocalStack, MinIO)</SelectItem>
+                <SelectItem value="aws">AWS S3</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {error && (
-            <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-              {error}
-            </div>
+          <Separator />
+
+          {connectionType === "local" && (
+            <>
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-3">
+                  <Label htmlFor="host">Host <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="host"
+                    value={host}
+                    onChange={(e) => setHost(e.target.value)}
+                    placeholder="localhost"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                  />
+                </div>
+                <div className="w-24 space-y-3">
+                  <Label htmlFor="port">Port <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="port"
+                    value={port}
+                    onChange={(e) => setPort(e.target.value)}
+                    placeholder="4566"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="local-access-key">Access Key <span className="text-destructive">*</span></Label>
+                <Input
+                  id="local-access-key"
+                  value={localAccessKey}
+                  onChange={(e) => setLocalAccessKey(e.target.value)}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="local-secret-key">Secret Key <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Input
+                    id="local-secret-key"
+                    type={showLocalSecret ? "text" : "password"}
+                    value={localSecretKey}
+                    onChange={(e) => setLocalSecretKey(e.target.value)}
+                    className="pr-10"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLocalSecret(!showLocalSecret)}
+                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                  >
+                    {showLocalSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
 
-          <button
-            onClick={handleConnect}
-            disabled={loading || !endpoint || !accessKey || !secretKey}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-          >
-            {loading ? "Connecting..." : "Connect"}
-          </button>
-        </div>
-      </div>
-    </div>
+          {connectionType === "aws" && (
+            <>
+              <div className="space-y-3">
+                <Label htmlFor="aws-region">Region <span className="text-destructive">*</span></Label>
+                <Select value={awsRegion} onValueChange={(v) => v && setAwsRegion(v)}>
+                  <SelectTrigger id="aws-region">
+                    <SelectValue placeholder="Select a region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AWS_REGIONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="aws-access-key">Access Key ID <span className="text-destructive">*</span></Label>
+                <Input
+                  id="aws-access-key"
+                  value={awsAccessKey}
+                  onChange={(e) => setAwsAccessKey(e.target.value)}
+                  placeholder="AKIA..."
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="aws-secret-key">Secret Access Key <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Input
+                    id="aws-secret-key"
+                    type={showAwsSecret ? "text" : "password"}
+                    value={awsSecretKey}
+                    onChange={(e) => setAwsSecretKey(e.target.value)}
+                    className="pr-10"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAwsSecret(!showAwsSecret)}
+                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                  >
+                    {showAwsSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              type="submit"
+              disabled={loading || !canConnect()}
+              className="flex-1"
+            >
+              {loading ? "Connecting..." : "Connect"}
+            </Button>
+            {loading && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

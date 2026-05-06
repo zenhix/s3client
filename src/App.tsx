@@ -1,18 +1,41 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useS3 } from "./hooks/useS3";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { useState, useCallback, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useS3 } from "@/hooks/useS3";
 import { save, open } from "@tauri-apps/plugin-dialog";
-import ConnectionDialog from "./components/ConnectionDialog";
-import BucketList from "./components/BucketList";
-import ObjectTable from "./components/ObjectTable";
-import Breadcrumbs from "./components/Breadcrumbs";
-import Toolbar from "./components/Toolbar";
-import FilePreview from "./components/FilePreview";
-import type { BucketInfo, ObjectInfo } from "./types";
+import { toast } from "sonner";
+import ConnectionSidebar from "@/components/ConnectionSidebar";
+import ConnectionDialog from "@/components/ConnectionDialog";
+import BucketList from "@/components/BucketList";
+import ObjectTable from "@/components/ObjectTable";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import Toolbar from "@/components/Toolbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, RefreshCw } from "lucide-react";
+import type { BucketInfo, ObjectInfo, SavedConnection } from "@/types";
 
 export default function App() {
   const s3 = useS3();
+  const [saved, setSaved] = useState<SavedConnection[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [buckets, setBuckets] = useState<BucketInfo[]>([]);
   const [currentBucket, setCurrentBucket] = useState<string | null>(null);
@@ -20,26 +43,35 @@ export default function App() {
   const [objects, setObjects] = useState<ObjectInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
-  const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     key: string;
   } | null>(null);
-  const [toast, setToast] = useState("");
-  const dropRef = useRef<HTMLDivElement>(null);
 
-  // History for back navigation
+  const [promptDialog, setPromptDialog] = useState<{
+    type: "create-folder" | "rename";
+    key?: string;
+    defaultValue?: string;
+  } | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+
   const [history, setHistory] = useState<
     Array<{ bucket: string | null; prefix: string }>
   >([]);
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
-  }
+  useEffect(() => {
+    s3.listSavedConnections().then(setSaved).catch(() => {});
+  }, []);
+
+  const refreshSaved = useCallback(async () => {
+    try {
+      const list = await s3.listSavedConnections();
+      setSaved(list);
+    } catch {}
+  }, [s3]);
 
   const loadBuckets = useCallback(
     async (connId: string) => {
@@ -51,7 +83,7 @@ export default function App() {
         setPrefix("");
         setObjects([]);
       } catch (e) {
-        setError(String(e));
+        toast.error("Failed to list buckets", { description: String(e) });
       } finally {
         setLoading(false);
       }
@@ -68,7 +100,7 @@ export default function App() {
         setSelected(new Set());
         setFilter("");
       } catch (e) {
-        setError(String(e));
+        toast.error("Failed to list objects", { description: String(e) });
       } finally {
         setLoading(false);
       }
@@ -76,10 +108,59 @@ export default function App() {
     [s3],
   );
 
-  function handleConnected(connId: string, ep: string) {
+  async function handleConnected(connId: string, ep: string) {
     setConnectionId(connId);
     setEndpoint(ep);
+    setHistory([]);
+    await refreshSaved();
     loadBuckets(connId);
+  }
+
+  async function handleSidebarConnect(conn: SavedConnection) {
+    // If already connected to this one, disconnect
+    if (activeSavedId === conn.id) {
+      if (connectionId) await s3.disconnect(connectionId);
+      setConnectionId(null);
+      setActiveSavedId(null);
+      setEndpoint("");
+      setBuckets([]);
+      setCurrentBucket(null);
+      setPrefix("");
+      setObjects([]);
+      setHistory([]);
+      setSelected(new Set());
+      toast.info("Disconnected");
+      return;
+    }
+
+    try {
+      const id = await s3.connect(conn.endpoint, conn.region, conn.access_key, conn.secret_key);
+      setConnectionId(id);
+      setActiveSavedId(conn.id);
+      setEndpoint(conn.endpoint || `AWS (${conn.region})`);
+      setHistory([]);
+      loadBuckets(id);
+    } catch (e) {
+      toast.error("Connection failed", { description: String(e) });
+    }
+  }
+
+  async function handleDeleteConnection(id: string) {
+    await s3.deleteSavedConnection(id);
+    setSaved(saved.filter((c) => c.id !== id));
+    if (activeSavedId === id) {
+      if (connectionId) await s3.disconnect(connectionId);
+      setConnectionId(null);
+      setActiveSavedId(null);
+      setEndpoint("");
+      setBuckets([]);
+      setCurrentBucket(null);
+      setPrefix("");
+      setObjects([]);
+      setHistory([]);
+      setSelected(new Set());
+    }
+    toast.success("Connection removed");
   }
 
   function enterBucket(bucket: string) {
@@ -98,8 +179,7 @@ export default function App() {
   }
 
   function goBack() {
-    if (!connectionId) return;
-    if (history.length === 0) return;
+    if (!connectionId || history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
     if (prev.bucket === null) {
@@ -137,241 +217,365 @@ export default function App() {
 
     const paths = Array.isArray(files) ? files : [files];
     for (const filePath of paths) {
-      const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
+      const fileName =
+        filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
       const key = prefix + fileName;
       try {
         await s3.uploadObject(connectionId, currentBucket, key, filePath);
-        showToast(`Uploaded ${fileName}`);
+        toast.success(`Uploaded ${fileName}`);
       } catch (e) {
-        setError(String(e));
+        toast.error(`Failed to upload ${fileName}`, {
+          description: String(e),
+        });
       }
     }
     loadObjects(connectionId, currentBucket, prefix);
   }
 
-  async function handleDelete() {
+  async function confirmDelete() {
     if (!connectionId || !currentBucket || selected.size === 0) return;
     const count = selected.size;
-    if (!window.confirm(`Delete ${count} object${count > 1 ? "s" : ""}?`))
-      return;
-
     for (const key of selected) {
       try {
         await s3.deleteObject(connectionId, currentBucket, key);
       } catch (e) {
-        setError(String(e));
+        toast.error(`Failed to delete`, { description: String(e) });
       }
     }
-    showToast(`Deleted ${count} object${count > 1 ? "s" : ""}`);
+    toast.success(`Deleted ${count} object${count > 1 ? "s" : ""}`);
     setSelected(new Set());
+    setDeleteDialogOpen(false);
     loadObjects(connectionId, currentBucket, prefix);
   }
 
   async function handleDownload(key: string) {
     if (!connectionId || !currentBucket) return;
-    const fileName = key.split("/").pop() ?? key;
-    const path = await save({ defaultPath: fileName });
-    if (path) {
-      try {
-        await s3.downloadObject(connectionId, currentBucket, key, path);
-        showToast(`Downloaded ${fileName}`);
-      } catch (e) {
-        setError(String(e));
+    const isFolder = key.endsWith("/");
+
+    if (isFolder) {
+      const folderName = key.split("/").filter(Boolean).pop() ?? "folder";
+      const path = await save({ defaultPath: `${folderName}.zip` });
+      if (path) {
+        try {
+          await s3.downloadFolder(connectionId, currentBucket, key, path);
+          toast.success(`Downloaded ${folderName}.zip`);
+        } catch (e) {
+          toast.error("Download failed", { description: String(e) });
+        }
+      }
+    } else {
+      const fileName = key.split("/").pop() ?? key;
+      const path = await save({ defaultPath: fileName });
+      if (path) {
+        try {
+          await s3.downloadObject(connectionId, currentBucket, key, path);
+          toast.success(`Downloaded ${fileName}`);
+        } catch (e) {
+          toast.error("Download failed", { description: String(e) });
+        }
       }
     }
   }
 
-  async function copyS3Uri(key: string) {
-    const uri = `s3://${currentBucket}/${key}`;
-    await writeText(uri);
-    showToast(`Copied ${uri}`);
-    setContextMenu(null);
+  async function handleDownloadSelected() {
+    if (!connectionId || !currentBucket || selected.size === 0) return;
+    for (const key of selected) {
+      await handleDownload(key);
+    }
+  }
+
+  function handleRename(key: string) {
+    const isFolder = key.endsWith("/");
+    const currentName = isFolder
+      ? key.split("/").filter(Boolean).pop() ?? ""
+      : key.split("/").pop() ?? "";
+    setPromptValue(currentName);
+    setPromptDialog({ type: "rename", key, defaultValue: currentName });
+  }
+
+  function handleCreateFolder() {
+    if (!connectionId || !currentBucket) return;
+    setPromptValue("");
+    setPromptDialog({ type: "create-folder" });
+  }
+
+  async function handlePromptConfirm() {
+    if (!connectionId || !currentBucket || !promptValue.trim()) return;
+    const value = promptValue.trim();
+
+    if (promptDialog?.type === "create-folder") {
+      const key = `${prefix}${value}/`;
+      try {
+        await s3.createFolder(connectionId, currentBucket, key);
+        toast.success(`Created folder ${value}`);
+        loadObjects(connectionId, currentBucket, prefix);
+      } catch (e) {
+        toast.error("Failed to create folder", { description: String(e) });
+      }
+    } else if (promptDialog?.type === "rename" && promptDialog.key) {
+      const oldKey = promptDialog.key;
+      const isFolder = oldKey.endsWith("/");
+      const currentName = isFolder
+        ? oldKey.split("/").filter(Boolean).pop() ?? ""
+        : oldKey.split("/").pop() ?? "";
+
+      if (value === currentName) {
+        setPromptDialog(null);
+        return;
+      }
+
+      const parentPrefix = oldKey.slice(0, oldKey.lastIndexOf(currentName));
+      const newKey = isFolder ? `${parentPrefix}${value}/` : `${parentPrefix}${value}`;
+
+      try {
+        await s3.renameObject(connectionId, currentBucket, oldKey, newKey);
+        toast.success(`Renamed to ${value}`);
+        loadObjects(connectionId, currentBucket, prefix);
+      } catch (e) {
+        toast.error("Rename failed", { description: String(e) });
+      }
+    }
+
+    setPromptDialog(null);
   }
 
   function handleContextMenu(e: React.MouseEvent, key: string) {
     setContextMenu({ x: e.clientX, y: e.clientY, key });
   }
 
-  // Close context menu on click elsewhere
   useEffect(() => {
-    function handler() {
+    function handler(e: MouseEvent) {
+      const menu = document.getElementById("context-menu");
+      if (menu && menu.contains(e.target as Node)) return;
       setContextMenu(null);
     }
     if (contextMenu) {
-      window.addEventListener("click", handler);
-      return () => window.removeEventListener("click", handler);
+      window.addEventListener("mousedown", handler);
+      return () => window.removeEventListener("mousedown", handler);
     }
   }, [contextMenu]);
 
-  // Drag and drop
-  useEffect(() => {
-    const el = dropRef.current;
-    if (!el || !currentBucket) return;
-
-    function handleDragOver(e: DragEvent) {
-      e.preventDefault();
-      el!.classList.add("ring-2", "ring-blue-400");
-    }
-    function handleDragLeave() {
-      el!.classList.remove("ring-2", "ring-blue-400");
-    }
-    async function handleDrop(e: DragEvent) {
-      e.preventDefault();
-      el!.classList.remove("ring-2", "ring-blue-400");
-      if (!connectionId || !currentBucket) return;
-
-      const files = e.dataTransfer?.files;
-      if (!files || files.length === 0) return;
-
-      // Tauri drag-and-drop provides file paths via a custom event,
-      // but the web DragEvent doesn't give local paths.
-      // For now, show a hint to use the Upload button.
-      showToast("Use the Upload button to select files");
-    }
-
-    el.addEventListener("dragover", handleDragOver);
-    el.addEventListener("dragleave", handleDragLeave);
-    el.addEventListener("drop", handleDrop);
-    return () => {
-      el.removeEventListener("dragover", handleDragOver);
-      el.removeEventListener("dragleave", handleDragLeave);
-      el.removeEventListener("drop", handleDrop);
-    };
-  }, [connectionId, currentBucket, prefix, s3]);
-
-  async function handleDisconnect() {
-    if (connectionId) {
-      await s3.disconnect(connectionId);
-    }
-    setConnectionId(null);
-    setEndpoint("");
-    setBuckets([]);
-    setCurrentBucket(null);
-    setPrefix("");
-    setObjects([]);
-    setHistory([]);
-    setSelected(new Set());
-  }
-
-  if (!connectionId) {
-    return <ConnectionDialog onConnected={handleConnected} />;
-  }
-
   return (
-    <div
-      ref={dropRef}
-      className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-    >
-      {/* Breadcrumbs */}
-      <Breadcrumbs
-        bucket={currentBucket}
-        prefix={prefix}
-        onNavigate={navigateTo}
-        onBack={goBack}
-        onBucketList={goToBucketList}
-      />
-
-      {/* Toolbar */}
-      <Toolbar
-        filter={filter}
-        onFilterChange={setFilter}
-        onUpload={handleUpload}
-        onDelete={handleDelete}
-        hasSelection={selected.size > 0}
-        inBucket={currentBucket !== null}
-      />
-
-      {/* Error banner */}
-      {error && (
-        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError("")} className="ml-2 hover:underline">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="px-4 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs">
-          Loading...
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {currentBucket === null ? (
-          <BucketList buckets={buckets} onSelect={enterBucket} />
-        ) : (
-          <ObjectTable
-            objects={objects}
-            prefix={prefix}
-            filter={filter}
-            selected={selected}
-            onSelect={handleSelect}
-            onNavigate={navigateTo}
-            onPreview={setPreviewKey}
-            onContextMenu={handleContextMenu}
+    <div className="flex flex-col h-screen bg-background text-foreground">
+      {/* Title bar */}
+      <div
+        className="flex items-center gap-3 px-4 h-[40px] border-b shrink-0 select-none text-sm"
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, a")) return;
+          e.preventDefault();
+          getCurrentWindow().startDragging();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => getCurrentWindow().close()}
+            className="w-3.5 h-3.5 rounded-full bg-[#ff5f57] hover:brightness-90 transition-all cursor-pointer"
           />
+          <button
+            onClick={() => getCurrentWindow().minimize()}
+            className="w-3.5 h-3.5 rounded-full bg-[#febc2e] hover:brightness-90 transition-all cursor-pointer"
+          />
+          <button
+            onClick={() => getCurrentWindow().toggleMaximize()}
+            className="w-3.5 h-3.5 rounded-full bg-[#28c840] hover:brightness-90 transition-all cursor-pointer"
+          />
+        </div>
+        {connectionId ? (
+          <span className="text-sm text-foreground/70">{endpoint}</span>
+        ) : (
+          <span className="text-sm text-foreground/70">s3client</span>
+        )}
+        <div className="flex-1" />
+        {connectionId && (
+          <button
+            onClick={() => {
+              if (currentBucket) {
+                loadObjects(connectionId, currentBucket, prefix);
+              } else {
+                loadBuckets(connectionId);
+              }
+            }}
+            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
 
-      {/* Status bar */}
-      <div className="px-4 py-1.5 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-        <span>
-          Connected to {endpoint}
-          {currentBucket && ` · ${currentBucket}`}
-          {objects.length > 0 &&
-            ` · ${objects.length} item${objects.length !== 1 ? "s" : ""}`}
-        </span>
-        <button
-          onClick={handleDisconnect}
-          className="text-red-500 hover:text-red-600 hover:underline"
-        >
-          Disconnect
-        </button>
+      {/* Body: sidebar + right panel */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar — full height */}
+        <div className="w-56 shrink-0 border-r flex flex-col">
+          <div className="flex items-center justify-between px-4 border-b text-sm h-[37px]">
+            <span className="text-muted-foreground text-xs uppercase tracking-wide">Connections</span>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          <ConnectionSidebar
+            saved={saved}
+            activeConnectionId={activeSavedId}
+            onConnect={handleSidebarConnect}
+            onDelete={handleDeleteConnection}
+            onNewConnection={() => setDialogOpen(true)}
+          />
+        </div>
+
+        {/* Right panel */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {connectionId ? (
+            <>
+              <Toolbar
+                filter={filter}
+                onFilterChange={setFilter}
+                onUpload={handleUpload}
+                onDownload={handleDownloadSelected}
+                onDelete={() => setDeleteDialogOpen(true)}
+                onBack={goBack}
+                onCreateFolder={handleCreateFolder}
+                hasSelection={selected.size > 0}
+                inBucket={currentBucket !== null}
+                canGoBack={history.length > 0}
+              />
+
+              {loading && (
+                <div className="px-4 py-1 text-xs text-muted-foreground border-b">
+                  Loading...
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto">
+                {currentBucket === null ? (
+                  <BucketList buckets={buckets} filter={filter} onSelect={enterBucket} />
+                ) : (
+                  <ObjectTable
+                    objects={objects}
+                    prefix={prefix}
+                    filter={filter}
+                    selected={selected}
+                    onSelect={handleSelect}
+                    onNavigate={navigateTo}
+                    onContextMenu={handleContextMenu}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
+              Select or add a connection to get started
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Footer — breadcrumbs */}
+      {connectionId && (
+        <div className="flex items-center gap-0.5 px-4 border-t shrink-0 h-[28px] text-[11px] text-muted-foreground overflow-x-auto">
+          <Breadcrumbs
+            bucket={currentBucket}
+            prefix={prefix}
+            onNavigate={navigateTo}
+            onBucketList={goToBucketList}
+          />
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 min-w-[160px]"
+          id="context-menu"
+          className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
-            onClick={() => copyS3Uri(contextMenu.key)}
-            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRename(contextMenu.key);
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center rounded-sm px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
-            Copy S3 URI
+            Rename
           </button>
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               handleDownload(contextMenu.key);
               setContextMenu(null);
             }}
-            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="w-full flex items-center rounded-sm px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             Download
           </button>
         </div>
       )}
 
-      {/* File preview modal */}
-      {previewKey && currentBucket && (
-        <FilePreview
-          connectionId={connectionId}
-          bucket={currentBucket}
-          objectKey={previewKey}
-          onClose={() => setPreviewKey(null)}
-        />
-      )}
+      {/* Prompt dialog (create folder / rename) */}
+      <Dialog open={!!promptDialog} onOpenChange={(open) => !open && setPromptDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {promptDialog?.type === "create-folder" ? "New Folder" : "Rename"}
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handlePromptConfirm();
+            }}
+            className="space-y-4"
+          >
+            <Input
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              placeholder={promptDialog?.type === "create-folder" ? "Folder name" : "New name"}
+              autoFocus
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPromptDialog(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={!promptValue.trim()}>
+                {promptDialog?.type === "create-folder" ? "Create" : "Rename"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 rounded-lg shadow-lg text-sm z-50 animate-[fadeIn_0.2s]">
-          {toast}
-        </div>
-      )}
+      {/* Add connection dialog */}
+      <ConnectionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={handleConnected}
+      />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete objects?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selected.size} selected object
+              {selected.size !== 1 ? "s" : ""}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

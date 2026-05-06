@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
-import { useS3 } from "../hooks/useS3";
+import { useS3 } from "@/hooks/useS3";
 import { save } from "@tauri-apps/plugin-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
 
 interface Props {
   connectionId: string;
   bucket: string;
   objectKey: string;
+  open: boolean;
   onClose: () => void;
 }
 
@@ -21,30 +31,9 @@ function isImage(ext: string): boolean {
 
 function isText(ext: string): boolean {
   return [
-    "txt",
-    "md",
-    "log",
-    "json",
-    "csv",
-    "xml",
-    "html",
-    "css",
-    "js",
-    "ts",
-    "py",
-    "rs",
-    "go",
-    "java",
-    "yaml",
-    "yml",
-    "toml",
-    "ini",
-    "cfg",
-    "sh",
-    "bash",
-    "tsx",
-    "jsx",
-    "sql",
+    "txt", "md", "log", "json", "csv", "xml", "html", "css", "js", "ts",
+    "py", "rs", "go", "java", "yaml", "yml", "toml", "ini", "cfg", "sh",
+    "bash", "tsx", "jsx", "sql",
   ].includes(ext);
 }
 
@@ -56,6 +45,7 @@ export default function FilePreview({
   connectionId,
   bucket,
   objectKey,
+  open,
   onClose,
 }: Props) {
   const s3 = useS3();
@@ -67,21 +57,23 @@ export default function FilePreview({
   const fileName = objectKey.split("/").pop() ?? objectKey;
 
   useEffect(() => {
+    if (!open) return;
     setLoading(true);
     setError("");
     s3.getObjectBytes(connectionId, bucket, objectKey)
       .then(setData)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [connectionId, bucket, objectKey]);
+  }, [connectionId, bucket, objectKey, open]);
 
   async function handleDownload() {
     const path = await save({ defaultPath: fileName });
     if (path) {
       try {
         await s3.downloadObject(connectionId, bucket, objectKey, path);
+        toast.success(`Downloaded ${fileName}`);
       } catch (e) {
-        setError(String(e));
+        toast.error("Download failed", { description: String(e) });
       }
     }
   }
@@ -89,13 +81,13 @@ export default function FilePreview({
   function renderContent() {
     if (loading) {
       return (
-        <div className="flex items-center justify-center h-64 text-gray-500">
+        <div className="flex items-center justify-center h-64 text-muted-foreground">
           Loading preview...
         </div>
       );
     }
     if (error) {
-      return <div className="text-red-500 p-4">{error}</div>;
+      return <div className="text-destructive p-4">{error}</div>;
     }
     if (!data) return null;
 
@@ -115,7 +107,7 @@ export default function FilePreview({
         <img
           src={`data:${mime};base64,${data}`}
           alt={fileName}
-          className="max-w-full max-h-[60vh] object-contain mx-auto"
+          className="max-w-full max-h-[60vh] object-contain mx-auto rounded-md"
         />
       );
     }
@@ -124,7 +116,7 @@ export default function FilePreview({
       return (
         <iframe
           src={`data:application/pdf;base64,${data}`}
-          className="w-full h-[60vh]"
+          className="w-full h-[60vh] rounded-md"
           title={fileName}
         />
       );
@@ -134,55 +126,45 @@ export default function FilePreview({
       try {
         const text = atob(data);
         return (
-          <pre className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg overflow-auto max-h-[60vh] text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-            {text}
-          </pre>
+          <ScrollArea className="h-[60vh]">
+            <pre className="p-4 bg-muted rounded-md text-sm font-mono whitespace-pre-wrap">
+              {text}
+            </pre>
+          </ScrollArea>
         );
       } catch {
         return (
-          <div className="text-gray-500 p-4">Cannot decode file content</div>
+          <div className="text-muted-foreground p-4">
+            Cannot decode file content
+          </div>
         );
       }
     }
 
     return (
-      <div className="text-gray-500 dark:text-gray-400 p-4 text-center">
+      <div className="text-muted-foreground p-4 text-center">
         Preview not available for .{ext} files.
         <br />
-        <button
-          onClick={handleDownload}
-          className="mt-2 text-blue-600 hover:underline"
-        >
+        <Button variant="link" onClick={handleDownload} className="mt-2">
           Download instead
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="font-medium text-gray-900 dark:text-white truncate">
-            {fileName}
-          </h3>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleDownload}
-              className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh]">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="truncate pr-4">{fileName}</DialogTitle>
+            <Button size="sm" onClick={handleDownload}>
               Download
-            </button>
-            <button
-              onClick={onClose}
-              className="px-2 py-1 text-gray-500 hover:text-gray-900 dark:hover:text-white text-lg"
-            >
-              ✕
-            </button>
+            </Button>
           </div>
-        </div>
-        <div className="flex-1 overflow-auto p-4">{renderContent()}</div>
-      </div>
-    </div>
+        </DialogHeader>
+        {renderContent()}
+      </DialogContent>
+    </Dialog>
   );
 }
