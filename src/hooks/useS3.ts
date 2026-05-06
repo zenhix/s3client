@@ -50,6 +50,20 @@ export function useS3() {
     });
   }
 
+  async function downloadFolder(
+    connectionId: string,
+    bucket: string,
+    prefix: string,
+    savePath: string,
+  ): Promise<void> {
+    return invoke("download_folder", {
+      connectionId,
+      bucket,
+      prefix,
+      savePath,
+    });
+  }
+
   async function uploadObject(
     connectionId: string,
     bucket: string,
@@ -62,6 +76,23 @@ export function useS3() {
       key,
       filePath,
     });
+  }
+
+  async function createFolder(
+    connectionId: string,
+    bucket: string,
+    key: string,
+  ): Promise<void> {
+    return invoke("create_folder", { connectionId, bucket, key });
+  }
+
+  async function renameObject(
+    connectionId: string,
+    bucket: string,
+    oldKey: string,
+    newKey: string,
+  ): Promise<void> {
+    return invoke("rename_object", { connectionId, bucket, oldKey, newKey });
   }
 
   async function deleteObject(
@@ -100,7 +131,10 @@ export function useS3() {
     listBuckets,
     listObjects,
     downloadObject,
+    downloadFolder,
     uploadObject,
+    createFolder,
+    renameObject,
     deleteObject,
     getObjectBytes,
     saveConnection,

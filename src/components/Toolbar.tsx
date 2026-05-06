@@ -1,4 +1,4 @@
-import { Upload, Download, Trash2, X, ChevronLeft } from "lucide-react";
+import { Upload, Download, Trash2, X, ChevronLeft, FolderPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   onDownload: () => void;
   onDelete: () => void;
   onBack: () => void;
+  onCreateFolder: () => void;
   hasSelection: boolean;
   inBucket: boolean;
   canGoBack: boolean;
@@ -20,6 +21,7 @@ export default function Toolbar({
   onDownload,
   onDelete,
   onBack,
+  onCreateFolder,
   hasSelection,
   inBucket,
   canGoBack,
@@ -54,6 +56,12 @@ export default function Toolbar({
       </div>
       {inBucket && (
         <div className="flex items-center gap-1">
+          <button
+            onClick={onCreateFolder}
+            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-1"
+          >
+            <FolderPlus className="h-4 w-4" />
+          </button>
           <button
             onClick={onUpload}
             className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-1"

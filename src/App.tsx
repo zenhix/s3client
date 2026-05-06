@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useS3 } from "@/hooks/useS3";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import ConnectionSidebar from "@/components/ConnectionSidebar";
@@ -10,6 +9,14 @@ import BucketList from "@/components/BucketList";
 import ObjectTable from "@/components/ObjectTable";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Toolbar from "@/components/Toolbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +28,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, RefreshCw } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import type { BucketInfo, ObjectInfo, SavedConnection } from "@/types";
 
 export default function App() {
@@ -44,6 +50,13 @@ export default function App() {
     y: number;
     key: string;
   } | null>(null);
+
+  const [promptDialog, setPromptDialog] = useState<{
+    type: "create-folder" | "rename";
+    key?: string;
+    defaultValue?: string;
+  } | null>(null);
+  const [promptValue, setPromptValue] = useState("");
 
   const [history, setHistory] = useState<
     Array<{ bucket: string | null; prefix: string }>
@@ -237,14 +250,29 @@ export default function App() {
 
   async function handleDownload(key: string) {
     if (!connectionId || !currentBucket) return;
-    const fileName = key.split("/").pop() ?? key;
-    const path = await save({ defaultPath: fileName });
-    if (path) {
-      try {
-        await s3.downloadObject(connectionId, currentBucket, key, path);
-        toast.success(`Downloaded ${fileName}`);
-      } catch (e) {
-        toast.error("Download failed", { description: String(e) });
+    const isFolder = key.endsWith("/");
+
+    if (isFolder) {
+      const folderName = key.split("/").filter(Boolean).pop() ?? "folder";
+      const path = await save({ defaultPath: `${folderName}.zip` });
+      if (path) {
+        try {
+          await s3.downloadFolder(connectionId, currentBucket, key, path);
+          toast.success(`Downloaded ${folderName}.zip`);
+        } catch (e) {
+          toast.error("Download failed", { description: String(e) });
+        }
+      }
+    } else {
+      const fileName = key.split("/").pop() ?? key;
+      const path = await save({ defaultPath: fileName });
+      if (path) {
+        try {
+          await s3.downloadObject(connectionId, currentBucket, key, path);
+          toast.success(`Downloaded ${fileName}`);
+        } catch (e) {
+          toast.error("Download failed", { description: String(e) });
+        }
       }
     }
   }
@@ -256,11 +284,59 @@ export default function App() {
     }
   }
 
-  async function copyS3Uri(key: string) {
-    const uri = `s3://${currentBucket}/${key}`;
-    await writeText(uri);
-    toast.success(`Copied ${uri}`);
-    setContextMenu(null);
+  function handleRename(key: string) {
+    const isFolder = key.endsWith("/");
+    const currentName = isFolder
+      ? key.split("/").filter(Boolean).pop() ?? ""
+      : key.split("/").pop() ?? "";
+    setPromptValue(currentName);
+    setPromptDialog({ type: "rename", key, defaultValue: currentName });
+  }
+
+  function handleCreateFolder() {
+    if (!connectionId || !currentBucket) return;
+    setPromptValue("");
+    setPromptDialog({ type: "create-folder" });
+  }
+
+  async function handlePromptConfirm() {
+    if (!connectionId || !currentBucket || !promptValue.trim()) return;
+    const value = promptValue.trim();
+
+    if (promptDialog?.type === "create-folder") {
+      const key = `${prefix}${value}/`;
+      try {
+        await s3.createFolder(connectionId, currentBucket, key);
+        toast.success(`Created folder ${value}`);
+        loadObjects(connectionId, currentBucket, prefix);
+      } catch (e) {
+        toast.error("Failed to create folder", { description: String(e) });
+      }
+    } else if (promptDialog?.type === "rename" && promptDialog.key) {
+      const oldKey = promptDialog.key;
+      const isFolder = oldKey.endsWith("/");
+      const currentName = isFolder
+        ? oldKey.split("/").filter(Boolean).pop() ?? ""
+        : oldKey.split("/").pop() ?? "";
+
+      if (value === currentName) {
+        setPromptDialog(null);
+        return;
+      }
+
+      const parentPrefix = oldKey.slice(0, oldKey.lastIndexOf(currentName));
+      const newKey = isFolder ? `${parentPrefix}${value}/` : `${parentPrefix}${value}`;
+
+      try {
+        await s3.renameObject(connectionId, currentBucket, oldKey, newKey);
+        toast.success(`Renamed to ${value}`);
+        loadObjects(connectionId, currentBucket, prefix);
+      } catch (e) {
+        toast.error("Rename failed", { description: String(e) });
+      }
+    }
+
+    setPromptDialog(null);
   }
 
   function handleContextMenu(e: React.MouseEvent, key: string) {
@@ -359,6 +435,7 @@ export default function App() {
                 onDownload={handleDownloadSelected}
                 onDelete={() => setDeleteDialogOpen(true)}
                 onBack={goBack}
+                onCreateFolder={handleCreateFolder}
                 hasSelection={selected.size > 0}
                 inBucket={currentBucket !== null}
                 canGoBack={history.length > 0}
@@ -416,13 +493,13 @@ export default function App() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              copyS3Uri(contextMenu.key);
+              handleRename(contextMenu.key);
+              setContextMenu(null);
             }}
             className="w-full flex items-center rounded-sm px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
-            Copy S3 URI
+            Rename
           </button>
-          <Separator className="my-1" />
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -435,6 +512,41 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Prompt dialog (create folder / rename) */}
+      <Dialog open={!!promptDialog} onOpenChange={(open) => !open && setPromptDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {promptDialog?.type === "create-folder" ? "New Folder" : "Rename"}
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handlePromptConfirm();
+            }}
+            className="space-y-4"
+          >
+            <Input
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              placeholder={promptDialog?.type === "create-folder" ? "Folder name" : "New name"}
+              autoFocus
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPromptDialog(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={!promptValue.trim()}>
+                {promptDialog?.type === "create-folder" ? "Create" : "Rename"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Add connection dialog */}
       <ConnectionDialog
