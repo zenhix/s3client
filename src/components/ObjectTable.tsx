@@ -112,7 +112,7 @@ export default function ObjectTable({
   }
 
   return (
-    <div className="overflow-auto flex-1">
+    <div className="overflow-auto flex-1 min-w-0">
       <Table>
         <TableHeader>
           <TableRow>
