@@ -18,7 +18,7 @@ export default function ConnectionSidebar({
   onDelete,
 }: Props) {
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="space-y-0.5">
         {saved.map((c) => {
           const isAws = c.connection_type === "aws";

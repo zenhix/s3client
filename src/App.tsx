@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useS3 } from "@/hooks/useS3";
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import ConnectionSidebar from "@/components/ConnectionSidebar";
 import ConnectionDialog from "@/components/ConnectionDialog";
@@ -63,14 +64,14 @@ export default function App() {
   >([]);
 
   useEffect(() => {
-    s3.listSavedConnections().then(setSaved).catch(() => {});
-  }, []);
+    s3.listSavedConnections().then(setSaved).catch(() => { /* ignore */ });
+  }, [s3]);
 
   const refreshSaved = useCallback(async () => {
     try {
       const list = await s3.listSavedConnections();
       setSaved(list);
-    } catch {}
+    } catch { /* ignore */ }
   }, [s3]);
 
   const loadBuckets = useCallback(
@@ -193,13 +194,6 @@ export default function App() {
     }
   }
 
-  function goToBucketList() {
-    if (!connectionId) return;
-    setHistory((h) => [...h, { bucket: currentBucket, prefix }]);
-    setCurrentBucket(null);
-    setPrefix("");
-    loadBuckets(connectionId);
-  }
 
   function handleSelect(key: string, checked: boolean) {
     setSelected((prev) => {
@@ -356,7 +350,7 @@ export default function App() {
   }, [contextMenu]);
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Title bar */}
       <div
         className="flex items-center gap-3 px-4 h-[40px] border-b shrink-0 select-none text-sm"
@@ -405,8 +399,8 @@ export default function App() {
       {/* Body: sidebar + right panel */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar — full height */}
-        <div className="w-56 shrink-0 border-r flex flex-col">
-          <div className="flex items-center justify-between px-4 border-b text-sm h-[37px]">
+        <div className="w-56 shrink-0 border-r flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 border-b text-sm h-[37px] shrink-0">
             <span className="text-muted-foreground text-xs uppercase tracking-wide">Connections</span>
             <button
               onClick={() => setDialogOpen(true)}
@@ -447,7 +441,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-y-auto">
                 {currentBucket === null ? (
                   <BucketList buckets={buckets} filter={filter} onSelect={enterBucket} />
                 ) : (
@@ -477,8 +471,16 @@ export default function App() {
           <Breadcrumbs
             bucket={currentBucket}
             prefix={prefix}
-            onNavigate={navigateTo}
-            onBucketList={goToBucketList}
+            bucketCount={buckets.length}
+            onCopy={async (path) => {
+              try {
+                await writeText(path);
+                toast.success(`Copied ${path}`);
+              } catch (e) {
+                console.error("[copy] failed:", e);
+                toast.error("Copy failed", { description: String(e) });
+              }
+            }}
           />
         </div>
       )}

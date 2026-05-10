@@ -30,10 +30,13 @@
       "Bash(identify /Users/kenny/zenhix/s3client/src-tauri/icons/icon.png)",
       "Bash(pnpm tauri:*)",
       "Bash(npx tauri:*)",
-      "Bash(npx shadcn@latest:*)",
-      "Bash(cargo check:*)",
-      "Bash(grep -r \"set_background\" target/debug/build/tauri-*/out/)",
-      "Bash(grep -rn \"background_color\\\\|set_background\\\\|transparent\" target/debug/build/tauri-*/out/*.rs)"
+      "Bash(ls /Users/kenny/zenhix/s3client/.eslintrc* /Users/kenny/zenhix/s3client/eslint.config* /Users/kenny/zenhix/s3client/biome.json)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(pnpm lint:all:*)",
+      "Bash(pnpm test:all:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }

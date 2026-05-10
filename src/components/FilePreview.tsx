@@ -58,13 +58,20 @@ export default function FilePreview({
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    setError("");
-    s3.getObjectBytes(connectionId, bucket, objectKey)
-      .then(setData)
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, [connectionId, bucket, objectKey, open]);
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await s3.getObjectBytes(connectionId, bucket, objectKey);
+        setData(result);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [connectionId, bucket, objectKey, open, s3]);
 
   async function handleDownload() {
     const path = await save({ defaultPath: fileName });

@@ -16,6 +16,18 @@ pnpm install
 cargo tauri dev
 ```
 
+## Lint
+
+```bash
+pnpm lint
+```
+
+## Test
+
+```bash
+pnpm test
+```
+
 ## Prod
 
 ```bash
