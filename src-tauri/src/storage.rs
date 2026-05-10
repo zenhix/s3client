@@ -26,9 +26,9 @@ pub fn find_matching_connection(
     region: &str,
     access_key: &str,
 ) -> Option<usize> {
-    connections.iter().position(|c| {
-        c.endpoint == endpoint && c.region == region && c.access_key == access_key
-    })
+    connections
+        .iter()
+        .position(|c| c.endpoint == endpoint && c.region == region && c.access_key == access_key)
 }
 
 /// Upsert a connection into the list (match by endpoint+region+access_key)
@@ -145,9 +145,18 @@ mod tests {
             make_conn("1", "http://localhost:4566", "us-east-1", "test"),
             make_conn("2", "", "us-west-2", "AKIA123"),
         ];
-        assert_eq!(find_matching_connection(&conns, "http://localhost:4566", "us-east-1", "test"), Some(0));
-        assert_eq!(find_matching_connection(&conns, "", "us-west-2", "AKIA123"), Some(1));
-        assert_eq!(find_matching_connection(&conns, "http://other:4566", "us-east-1", "test"), None);
+        assert_eq!(
+            find_matching_connection(&conns, "http://localhost:4566", "us-east-1", "test"),
+            Some(0)
+        );
+        assert_eq!(
+            find_matching_connection(&conns, "", "us-west-2", "AKIA123"),
+            Some(1)
+        );
+        assert_eq!(
+            find_matching_connection(&conns, "http://other:4566", "us-east-1", "test"),
+            None
+        );
     }
 
     #[test]

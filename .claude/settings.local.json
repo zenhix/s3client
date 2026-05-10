@@ -35,7 +35,8 @@
       "Bash(pnpm test:*)",
       "Bash(cargo clippy:*)",
       "Bash(pnpm lint:all:*)",
-      "Bash(pnpm test:all:*)"
+      "Bash(pnpm test:all:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }
