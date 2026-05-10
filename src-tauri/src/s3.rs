@@ -36,7 +36,10 @@ pub async fn connect(
     access_key: String,
     secret_key: String,
 ) -> Result<String, String> {
-    println!("[s3] connect called: endpoint={}, region={}, access_key={}", endpoint, region, access_key);
+    println!(
+        "[s3] connect called: endpoint={}, region={}, access_key={}",
+        endpoint, region, access_key
+    );
 
     let creds = Credentials::new(&access_key, &secret_key, None, None, "s3browser");
 
@@ -91,10 +94,7 @@ pub async fn disconnect(state: State<'_, S3State>, connection_id: String) -> Res
     Ok(())
 }
 
-fn get_client(
-    state: &State<'_, S3State>,
-    connection_id: &str,
-) -> Result<S3Client, String> {
+fn get_client(state: &State<'_, S3State>, connection_id: &str) -> Result<S3Client, String> {
     state
         .clients
         .lock()
@@ -141,10 +141,7 @@ pub async fn list_objects(
 ) -> Result<Vec<ObjectInfo>, String> {
     let client = get_client(&state, &connection_id)?;
 
-    let mut request = client
-        .list_objects_v2()
-        .bucket(&bucket)
-        .delimiter("/");
+    let mut request = client.list_objects_v2().bucket(&bucket).delimiter("/");
 
     if !prefix.is_empty() {
         request = request.prefix(&prefix);
@@ -182,9 +179,9 @@ pub async fn list_objects(
             last_modified: obj.last_modified().map(|d| {
                 d.fmt(aws_sdk_s3::primitives::DateTimeFormat::DateTime)
                     .unwrap_or_default()
-                }),
-                is_folder: false,
-            });
+            }),
+            is_folder: false,
+        });
     }
 
     Ok(objects)
@@ -283,10 +280,7 @@ pub async fn download_folder(
     let mut continuation_token: Option<String> = None;
 
     loop {
-        let mut request = client
-            .list_objects_v2()
-            .bucket(&bucket)
-            .prefix(&prefix);
+        let mut request = client.list_objects_v2().bucket(&bucket).prefix(&prefix);
 
         if let Some(token) = &continuation_token {
             request = request.continuation_token(token);
@@ -347,7 +341,8 @@ pub async fn download_folder(
             .map_err(|e| format!("Zip write error: {}", e))?;
     }
 
-    zip.finish().map_err(|e| format!("Zip finish error: {}", e))?;
+    zip.finish()
+        .map_err(|e| format!("Zip finish error: {}", e))?;
 
     Ok(())
 }
@@ -361,7 +356,11 @@ pub async fn create_folder(
 ) -> Result<(), String> {
     let client = get_client(&state, &connection_id)?;
 
-    let folder_key = if key.ends_with('/') { key.clone() } else { format!("{}/", key) };
+    let folder_key = if key.ends_with('/') {
+        key.clone()
+    } else {
+        format!("{}/", key)
+    };
 
     println!("[s3] create_folder: bucket={}, key={}", bucket, folder_key);
 
@@ -398,10 +397,7 @@ pub async fn rename_object(
         let mut continuation_token: Option<String> = None;
 
         loop {
-            let mut request = client
-                .list_objects_v2()
-                .bucket(&bucket)
-                .prefix(&old_key);
+            let mut request = client.list_objects_v2().bucket(&bucket).prefix(&old_key);
 
             if let Some(token) = &continuation_token {
                 request = request.continuation_token(token);

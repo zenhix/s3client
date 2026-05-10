@@ -33,7 +33,9 @@
       "Bash(npx shadcn@latest:*)",
       "Bash(cargo check:*)",
       "Bash(grep -r \"set_background\" target/debug/build/tauri-*/out/)",
-      "Bash(grep -rn \"background_color\\\\|set_background\\\\|transparent\" target/debug/build/tauri-*/out/*.rs)"
+      "Bash(grep -rn \"background_color\\\\|set_background\\\\|transparent\" target/debug/build/tauri-*/out/*.rs)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)"
     ]
   }
 }

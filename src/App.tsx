@@ -33,64 +33,7 @@ import type { BucketInfo, ObjectInfo, SavedConnection } from "@/types";
 
 export default function App() {
   const s3 = useS3();
-  const [saved, setSaved] = useState<SavedConnection[]>([
-    {
-      id: "mock-1",
-      name: "Local S3",
-      connection_type: "local",
-      endpoint: "http://localhost:4566",
-      region: "us-east-1",
-      access_key: "test",
-      secret_key: "test",
-    },
-    {
-      id: "mock-2",
-      name: "AWS S3",
-      connection_type: "aws",
-      endpoint: "",
-      region: "us-west-2",
-      access_key: "AKIAIOSFODNN7EXAMPLE",
-      secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    },
-    {
-      id: "mock-3",
-      name: "Local S3",
-      connection_type: "local",
-      endpoint: "http://192.168.1.50:9000",
-      region: "us-east-1",
-      access_key: "minioadmin",
-      secret_key: "minioadmin",
-    },
-    {
-      id: "mock-4",
-      name: "AWS S3",
-      connection_type: "aws",
-      endpoint: "",
-      region: "eu-central-1",
-      access_key: "AKIAI44QH8DHBEXAMPLE",
-      secret_key: "je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY",
-    },
-    { id: "mock-5", name: "Local S3", connection_type: "local", endpoint: "http://localhost:9000", region: "us-east-1", access_key: "minio", secret_key: "minio123" },
-    { id: "mock-6", name: "AWS S3", connection_type: "aws", endpoint: "", region: "ap-southeast-1", access_key: "AKIAXYZ123SINGAPORE", secret_key: "secret" },
-    { id: "mock-7", name: "Local S3", connection_type: "local", endpoint: "http://10.0.0.5:4566", region: "us-east-1", access_key: "devuser", secret_key: "devpass" },
-    { id: "mock-8", name: "AWS S3", connection_type: "aws", endpoint: "", region: "eu-west-1", access_key: "AKIAireland001", secret_key: "secret" },
-    { id: "mock-9", name: "Local S3", connection_type: "local", endpoint: "http://staging.internal:4566", region: "us-east-1", access_key: "staging", secret_key: "staging" },
-    { id: "mock-10", name: "AWS S3", connection_type: "aws", endpoint: "", region: "ap-northeast-1", access_key: "AKIATOKYO999", secret_key: "secret" },
-    { id: "mock-11", name: "Local S3", connection_type: "local", endpoint: "http://docker-host:9000", region: "us-east-1", access_key: "docker", secret_key: "docker123" },
-    { id: "mock-12", name: "AWS S3", connection_type: "aws", endpoint: "", region: "us-east-2", access_key: "AKIAOHIO5678", secret_key: "secret" },
-    { id: "mock-13", name: "Local S3", connection_type: "local", endpoint: "http://192.168.0.100:9000", region: "us-east-1", access_key: "admin", secret_key: "admin" },
-    { id: "mock-14", name: "AWS S3", connection_type: "aws", endpoint: "", region: "sa-east-1", access_key: "AKIASAOPAULO", secret_key: "secret" },
-    { id: "mock-15", name: "Local S3", connection_type: "local", endpoint: "http://minio.dev:9000", region: "us-east-1", access_key: "devops", secret_key: "devops" },
-    { id: "mock-16", name: "AWS S3", connection_type: "aws", endpoint: "", region: "ca-central-1", access_key: "AKIACANADA001", secret_key: "secret" },
-    { id: "mock-17", name: "Local S3", connection_type: "local", endpoint: "http://localhost:5000", region: "us-east-1", access_key: "localdev", secret_key: "localdev" },
-    { id: "mock-18", name: "AWS S3", connection_type: "aws", endpoint: "", region: "eu-north-1", access_key: "AKIASTOCKHOLM", secret_key: "secret" },
-    { id: "mock-19", name: "Local S3", connection_type: "local", endpoint: "http://nas.home:9000", region: "us-east-1", access_key: "nasuser", secret_key: "naspass" },
-    { id: "mock-20", name: "AWS S3", connection_type: "aws", endpoint: "", region: "ap-south-1", access_key: "AKIAMUMBAI777", secret_key: "secret" },
-    { id: "mock-21", name: "Local S3", connection_type: "local", endpoint: "http://ci-runner:4566", region: "us-east-1", access_key: "ci", secret_key: "ci" },
-    { id: "mock-22", name: "AWS S3", connection_type: "aws", endpoint: "", region: "eu-west-2", access_key: "AKIALONDON002", secret_key: "secret" },
-    { id: "mock-23", name: "Local S3", connection_type: "local", endpoint: "http://k8s-minio:9000", region: "us-east-1", access_key: "k8sadmin", secret_key: "k8sadmin" },
-    { id: "mock-24", name: "AWS S3", connection_type: "aws", endpoint: "", region: "eu-west-3", access_key: "AKIAPARIS003", secret_key: "secret" },
-  ]);
+  const [saved, setSaved] = useState<SavedConnection[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
@@ -120,21 +63,9 @@ export default function App() {
     Array<{ bucket: string | null; prefix: string }>
   >([]);
 
-  // TODO: remove mock data and uncomment
-  // useEffect(() => {
-  //   s3.listSavedConnections().then(setSaved).catch(() => {});
-  // }, []);
-
-  const MOCK_BUCKETS: BucketInfo[] = Array.from({ length: 20 }, (_, i) => ({
-    name: [
-      "production-assets", "staging-uploads", "dev-logs", "analytics-data",
-      "user-avatars", "backup-daily", "media-transcoded", "ml-training-data",
-      "static-website", "email-templates", "terraform-state", "ci-artifacts",
-      "data-lake-raw", "data-lake-processed", "cdn-origin", "app-configs",
-      "audit-logs", "customer-exports", "thumbnail-cache", "temp-uploads",
-    ][i],
-    created_at: new Date(2025, 0 + i, 1 + i).toISOString(),
-  }));
+  useEffect(() => {
+    s3.listSavedConnections().then(setSaved).catch(() => {});
+  }, []);
 
   const refreshSaved = useCallback(async () => {
     try {
@@ -147,12 +78,8 @@ export default function App() {
     async (connId: string) => {
       setLoading(true);
       try {
-        if (connId.startsWith("mock-")) {
-          setBuckets(MOCK_BUCKETS);
-        } else {
-          const b = await s3.listBuckets(connId);
-          setBuckets(b);
-        }
+        const b = await s3.listBuckets(connId);
+        setBuckets(b);
         setCurrentBucket(null);
         setPrefix("");
         setObjects([]);
@@ -169,27 +96,8 @@ export default function App() {
     async (connId: string, bucket: string, pfx: string) => {
       setLoading(true);
       try {
-        if (connId.startsWith("mock-")) {
-          // Generate mock objects based on prefix
-          const folders = ["documents", "images", "videos", "backups", "logs", "configs", "reports", "exports", "archives", "temp"].map(
-            (name) => ({ key: `${pfx}${name}/`, size: 0, last_modified: null, is_folder: true })
-          );
-          const files = [
-            "readme.md", "index.html", "style.css", "app.js", "config.json",
-            "data.csv", "report-2025.pdf", "logo.png", "background.jpg", "video.mp4",
-            "backup-jan.tar.gz", "schema.sql", "Dockerfile", "docker-compose.yml", ".env.example",
-            "package.json", "tsconfig.json", "main.rs", "requirements.txt", "notes.txt",
-          ].map((name) => ({
-            key: `${pfx}${name}`,
-            size: Math.floor(Math.random() * 10000000) + 100,
-            last_modified: new Date(2025, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toISOString(),
-            is_folder: false,
-          }));
-          setObjects([...folders, ...files]);
-        } else {
-          const objs = await s3.listObjects(connId, bucket, pfx);
-          setObjects(objs);
-        }
+        const objs = await s3.listObjects(connId, bucket, pfx);
+        setObjects(objs);
         setSelected(new Set());
         setFilter("");
       } catch (e) {
@@ -212,7 +120,7 @@ export default function App() {
   async function handleSidebarConnect(conn: SavedConnection) {
     // If already connected to this one, disconnect
     if (activeSavedId === conn.id) {
-      if (connectionId && !connectionId.startsWith("mock-")) await s3.disconnect(connectionId);
+      if (connectionId) await s3.disconnect(connectionId);
       setConnectionId(null);
       setActiveSavedId(null);
       setEndpoint("");
@@ -223,16 +131,6 @@ export default function App() {
       setHistory([]);
       setSelected(new Set());
       toast.info("Disconnected");
-      return;
-    }
-
-    // Mock connections don't need real S3
-    if (conn.id.startsWith("mock-")) {
-      setConnectionId(conn.id);
-      setActiveSavedId(conn.id);
-      setEndpoint(conn.endpoint || `AWS (${conn.region})`);
-      setHistory([]);
-      loadBuckets(conn.id);
       return;
     }
 
@@ -249,10 +147,10 @@ export default function App() {
   }
 
   async function handleDeleteConnection(id: string) {
-    if (!id.startsWith("mock-")) await s3.deleteSavedConnection(id);
+    await s3.deleteSavedConnection(id);
     setSaved(saved.filter((c) => c.id !== id));
     if (activeSavedId === id) {
-      if (connectionId && !connectionId.startsWith("mock-")) await s3.disconnect(connectionId);
+      if (connectionId) await s3.disconnect(connectionId);
       setConnectionId(null);
       setActiveSavedId(null);
       setEndpoint("");
