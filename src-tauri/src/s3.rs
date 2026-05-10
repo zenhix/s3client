@@ -494,3 +494,73 @@ pub async fn get_object_bytes(
     // Return as base64 encoded string
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bucket_info_serialization() {
+        let bucket = BucketInfo {
+            name: "test-bucket".to_string(),
+            created_at: Some("2025-01-01T00:00:00Z".to_string()),
+        };
+        let json = serde_json::to_string(&bucket).unwrap();
+        let parsed: BucketInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, "test-bucket");
+        assert_eq!(parsed.created_at, Some("2025-01-01T00:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_bucket_info_null_date() {
+        let bucket = BucketInfo {
+            name: "my-bucket".to_string(),
+            created_at: None,
+        };
+        let json = serde_json::to_string(&bucket).unwrap();
+        assert!(json.contains("\"created_at\":null"));
+    }
+
+    #[test]
+    fn test_object_info_file() {
+        let obj = ObjectInfo {
+            key: "folder/file.txt".to_string(),
+            size: 1024,
+            last_modified: Some("2025-06-15T12:00:00Z".to_string()),
+            is_folder: false,
+        };
+        let json = serde_json::to_string(&obj).unwrap();
+        let parsed: ObjectInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.key, "folder/file.txt");
+        assert_eq!(parsed.size, 1024);
+        assert!(!parsed.is_folder);
+    }
+
+    #[test]
+    fn test_object_info_folder() {
+        let obj = ObjectInfo {
+            key: "my-folder/".to_string(),
+            size: 0,
+            last_modified: None,
+            is_folder: true,
+        };
+        assert!(obj.is_folder);
+        assert_eq!(obj.size, 0);
+    }
+
+    #[test]
+    fn test_s3_state_init() {
+        let state = S3State {
+            clients: Mutex::new(HashMap::new()),
+        };
+        let clients = state.clients.lock().unwrap();
+        assert!(clients.is_empty());
+    }
+
+    #[test]
+    fn test_base64_encoding() {
+        let data = b"hello world";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+        assert_eq!(encoded, "aGVsbG8gd29ybGQ=");
+    }
+}

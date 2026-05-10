@@ -23,19 +23,16 @@ export default function Breadcrumbs({
     : "";
 
   // Collapse: show only last part with ... if more than 1 segment
-  let displayParts: Array<{ label: string; isEllipsis: boolean; isLast: boolean }> = [];
-  if (parts.length <= 1) {
-    displayParts = parts.map((part, i) => ({
-      label: truncate(part, 30),
-      isEllipsis: false,
-      isLast: i === parts.length - 1,
-    }));
-  } else {
-    displayParts = [
-      { label: "...", isEllipsis: true, isLast: false },
-      { label: truncate(parts[parts.length - 1], 30), isEllipsis: false, isLast: true },
-    ];
-  }
+  const displayParts = parts.length <= 1
+    ? parts.map((part, i) => ({
+        label: truncate(part, 30),
+        isEllipsis: false,
+        isLast: i === parts.length - 1,
+      }))
+    : [
+        { label: "...", isEllipsis: true, isLast: false },
+        { label: truncate(parts[parts.length - 1], 30), isEllipsis: false, isLast: true },
+      ];
 
   return (
     <div

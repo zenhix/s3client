@@ -9,6 +9,14 @@
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/zenhix/s3client/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
+  },
   "app": {
     "windows": [
       {
@@ -39,7 +47,8 @@
             "dialog:default",
             "clipboard-manager:default",
             "clipboard-manager:allow-write-text",
-            "fs:default"
+            "fs:default",
+            "updater:default"
           ]
         }
       ]

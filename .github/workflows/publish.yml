@@ -11,6 +11,14 @@ on:
           - patch
           - minor
           - major
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
       platform:
         description: Target platform
         required: true
@@ -29,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +53,8 @@ jobs:
         id: bump
         run: |
           CURRENT=$(jq -r .version package.json)
-          IFS='.' read -r major minor patch <<< "$CURRENT"
+          BASE_VERSION=$(echo "$CURRENT" | sed 's/-.*//')
+          IFS='.' read -r major minor patch <<< "$BASE_VERSION"
 
           case "${{ inputs.bump }}" in
             major) major=$((major + 1)); minor=0; patch=0 ;;
@@ -52,8 +62,17 @@ jobs:
             patch) patch=$((patch + 1)) ;;
           esac
 
-          NEW_VERSION="${major}.${minor}.${patch}"
+          CHANNEL="${{ inputs.channel }}"
+          if [ "$CHANNEL" = "stable" ]; then
+            NEW_VERSION="${major}.${minor}.${patch}"
+          else
+            TIMESTAMP=$(date +%Y%m%d%H%M)
+            NEW_VERSION="${major}.${minor}.${patch}-${CHANNEL}.${TIMESTAMP}"
+          fi
+
+          TAG="v${NEW_VERSION}"
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           # Update package.json
           jq --arg v "$NEW_VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
@@ -69,16 +88,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
-          git commit -m "chore: bump version to v${{ steps.bump.outputs.version }}"
-          git tag "v${{ steps.bump.outputs.version }}"
+          git commit -m "chore: release ${{ steps.bump.outputs.tag }} (${{ inputs.channel }})"
+          git tag "${{ steps.bump.outputs.tag }}"
           git push
           git push --tags
 
   build-macos:
-    name: Build macOS
+    name: Build macOS (${{ matrix.target }})
     needs: bump-version
     if: inputs.platform == 'all' || inputs.platform == 'macos'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
@@ -89,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v${{ needs.bump-version.outputs.version }}
+          ref: ${{ needs.bump-version.outputs.tag }}
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -115,12 +135,18 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v${{ needs.bump-version.outputs.version }}
-          releaseName: s3client v${{ needs.bump-version.outputs.version }}
-          releaseBody: "Release v${{ needs.bump-version.outputs.version }}"
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ needs.bump-version.outputs.tag }}
+          releaseName: "s3client ${{ needs.bump-version.outputs.tag }} (${{ inputs.channel }})"
+          releaseBody: |
+            ## s3client ${{ needs.bump-version.outputs.tag }}
+            **Channel:** ${{ inputs.channel }}
+          releaseDraft: false
+          prerelease: ${{ inputs.channel != 'stable' }}
+          includeUpdaterJson: true
+          updaterJsonKeepUniversal: true
           args: --target ${{ matrix.target }}
 
   build-windows:
@@ -131,7 +157,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v${{ needs.bump-version.outputs.version }}
+          ref: ${{ needs.bump-version.outputs.tag }}
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -154,9 +180,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v${{ needs.bump-version.outputs.version }}
-          releaseName: s3client v${{ needs.bump-version.outputs.version }}
-          releaseBody: "Release v${{ needs.bump-version.outputs.version }}"
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ needs.bump-version.outputs.tag }}
+          releaseName: "s3client ${{ needs.bump-version.outputs.tag }} (${{ inputs.channel }})"
+          releaseBody: |
+            ## s3client ${{ needs.bump-version.outputs.tag }}
+            **Channel:** ${{ inputs.channel }}
+          releaseDraft: false
+          prerelease: ${{ inputs.channel != 'stable' }}
+          includeUpdaterJson: true
           args: --target x86_64-pc-windows-msvc

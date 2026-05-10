@@ -64,14 +64,14 @@ export default function App() {
   >([]);
 
   useEffect(() => {
-    s3.listSavedConnections().then(setSaved).catch(() => {});
-  }, []);
+    s3.listSavedConnections().then(setSaved).catch(() => { /* ignore */ });
+  }, [s3]);
 
   const refreshSaved = useCallback(async () => {
     try {
       const list = await s3.listSavedConnections();
       setSaved(list);
-    } catch {}
+    } catch { /* ignore */ }
   }, [s3]);
 
   const loadBuckets = useCallback(
@@ -194,13 +194,6 @@ export default function App() {
     }
   }
 
-  function goToBucketList() {
-    if (!connectionId) return;
-    setHistory((h) => [...h, { bucket: currentBucket, prefix }]);
-    setCurrentBucket(null);
-    setPrefix("");
-    loadBuckets(connectionId);
-  }
 
   function handleSelect(key: string, checked: boolean) {
     setSelected((prev) => {

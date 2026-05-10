@@ -16,6 +16,23 @@ pnpm install
 cargo tauri dev
 ```
 
+## Lint
+
+```bash
+pnpm lint        # frontend (ESLint)
+pnpm lint:rust   # backend (clippy)
+pnpm lint:all    # both
+```
+
+## Test
+
+```bash
+pnpm test        # frontend (Vitest)
+pnpm test:rust   # backend (cargo test)
+pnpm test:all    # both
+pnpm test:watch  # frontend watch mode
+```
+
 ## Prod
 
 ```bash
